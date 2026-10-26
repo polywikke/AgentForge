@@ -152,16 +152,54 @@ bool apiConfigured() {
     return !api.value("endpoint", "").empty() && !api.value("key", "").empty();
 }
 
+// 允许用户只填 base_url：自动补 /v1/chat/completions 或 /v1/messages
+std::string normalizeChatEndpoint(std::string endpoint, const std::string& provider) {
+    while (!endpoint.empty() &&
+           (endpoint.back() == ' ' || endpoint.back() == '\t' ||
+            endpoint.back() == '\r' || endpoint.back() == '\n')) {
+        endpoint.pop_back();
+    }
+    while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
+    if (endpoint.empty()) return endpoint;
+
+    // 已经是完整端点
+    if (endpoint.find("/chat/completions") != std::string::npos) return endpoint;
+    if (endpoint.size() >= 8 &&
+        endpoint.compare(endpoint.size() - 8, 8, "/messages") == 0) {
+        return endpoint;
+    }
+
+    const bool anthropic = provider == "anthropic" ||
+                           endpoint.find("anthropic") != std::string::npos;
+    const std::string suffix = anthropic ? "/messages" : "/chat/completions";
+    if (endpoint.size() >= 3 && endpoint.compare(endpoint.size() - 3, 3, "/v1") == 0) {
+        return endpoint + suffix;
+    }
+    if (endpoint.find("/v1/") != std::string::npos) {
+        return endpoint + suffix;
+    }
+    return endpoint + "/v1" + suffix;
+}
+
 agentforge::APIConfig makeApiConfig() {
     agentforge::APIConfig cfg;
     const auto& api = g_config["api"];
     cfg.api_key = api.value("key", "");
-    cfg.api_endpoint = api.value("endpoint", "");
+    std::string endpoint = api.value("endpoint", "");
+    std::string provider = api.value("provider", "custom");
+
+    // base_url 也能用：根据域名/路径推断 provider，再补全协议路径
+    if (provider == "custom" || provider.empty()) {
+        if (endpoint.find("anthropic") != std::string::npos) provider = "anthropic";
+        else if (endpoint.find("deepseek") != std::string::npos) provider = "deepseek";
+        else if (endpoint.find("openai") != std::string::npos) provider = "openai";
+    }
+
+    cfg.api_endpoint = normalizeChatEndpoint(endpoint, provider);
     cfg.model = api.value("model", "claude-sonnet-5-5");
     cfg.temperature = api.value("temperature", 0.7);
     cfg.max_tokens = api.value("max_tokens", 4096);
 
-    std::string provider = api.value("provider", "custom");
     if (provider == "anthropic") cfg.provider = agentforge::APIConfig::Anthropic;
     else if (provider == "openai") cfg.provider = agentforge::APIConfig::OpenAI;
     else if (provider == "deepseek") cfg.provider = agentforge::APIConfig::DeepSeek;
