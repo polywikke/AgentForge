@@ -45,8 +45,20 @@ conversations/<session_id>/
 ├─ snapshot.json             完整消息快照
 ├─ checkpoints/              Write/Edit 前文件备份
 ├─ trace.jsonl               L12 Trace
-└─ artifacts/manifest.jsonl  本次对话改动的文件路径
+├─ artifacts/manifest.jsonl  本次对话改动的文件路径
+└─ workspace/                Agent 默认写/改/执行目录
 ```
+
+### 工作区
+
+⚙️ 设置 → **工作区路径**：
+
+- 留空：当前对话的 `conversations/<日期_主题>/workspace/`
+- 填写：使用指定目录，例如项目根目录
+- `Write` / `Edit` / `Bash` 只能写该目录；绝对路径越界会被拒绝
+- `Read` / `Glob` / `Grep` 仍可读取项目源码
+
+对话目录名格式：`YYYYMMDD_HHMMSS_<主题>`，主题取首条用户消息并做非法字符清理。
 
 ### 设置里切换模型
 
@@ -191,7 +203,8 @@ SSE 事件：`start`、`stage`、`chunk`、`tool_call`、`tool_result`、
   "tools": {
     "sandbox": true, "work_dir": "",
     "dump_dir": ".af-dump", "persist_threshold": 20000,
-    "permission_mode": "ask"
+    "permission_mode": "ask",
+    "workspace_root": ""
   },
   "retrieval": { "enabled": true, "top_k": 5 }
 }

@@ -54,6 +54,7 @@ bin\Release\agentforge_web.exe --config config.test.json --port 18080
 - 六道闸门：步数/token/墙钟/连续错误/重复调用/取消。
 - `/api/cancel` + `atomic<bool>`；前端停止按钮。
 - Bash 沙箱升级为 **Job Object**（KILL_ON_JOB_CLOSE + 进程数/内存上限 + 超时 TerminateJobObject）。
+- **工作区边界**：`tools.workspace_root`（空 = 对话 `workspace/`）；Write/Edit/Bash 受限制，Read/Glob/Grep 可读项目。
 - 新增 `include/permission_gate.hpp`：`.af-permissions.json` 持久化、Bash 前缀规则、Deny 优先；
   Web 权限弹窗（允许一次/总是允许/拒绝/总是拒绝）。
 
@@ -65,9 +66,9 @@ bin\Release\agentforge_web.exe --config config.test.json --port 18080
 
 ### 3.5 L10 会话/记忆
 
-- `SessionStore`：每次对话一个目录 `conversations/<id>/`
+- `SessionStore`：每次对话一个目录 `conversations/<YYYYMMDD_HHMMSS_主题>/`
   （`README.md`、`meta.json`、`snapshot.json`、`events.jsonl`、`checkpoints/`、
-  `trace.jsonl`、`artifacts/manifest.jsonl`）。
+  `trace.jsonl`、`artifacts/manifest.jsonl`、`workspace/`）。
 - 文件检查点/恢复（Write/Edit 前快照）。
 - 三层记忆：AGENTS.md/CLAUDE.md + MEMORY.md（自动抽取、去重、启动加载）。
 - Web 会话侧栏、`/api/sessions`、`/api/memory`。
@@ -126,8 +127,8 @@ web/index.html ──SSE──> main_web_simple.cpp
 
 1. **L9 用 Web 替代 FTXUI**：如果课程强制 TUI，需要另写 FTXUI 后端；当前 Web 功能更完整。
 2. **tree-sitter 仅 C/C++**：其他语言走词法兜底；多文法可后续扩展。
-3. **文件工具不走沙箱路径白名单**：只有 Bash 走沙箱；Read/Write/Edit 直接文件系统。若要强隔离，
-   可给这些工具加 `isPathAllowed` 校验。
+3. **工作区是程序级边界**：Write/Edit/Bash 已受 `workspace_root` 限制，Read/Glob/Grep 仍可读项目；
+   但这不是 OS 级文件系统沙箱，Bash 仍可能通过未识别的路径写法绕过，强隔离需 Windows Sandbox/容器。
 4. **会话恢复是"继续历史"**，不是进程级自动重放；检查点只回滚文件。
 5. **Anthropic 流式**未用真实 Anthropic Key 验收（无 Key），代码已实现并在失败时回退非流式。
 6. **插件 ABI / git diff / 向量嵌入**未实现（超出本轮 L1-L12 主线，见矩阵文档）。

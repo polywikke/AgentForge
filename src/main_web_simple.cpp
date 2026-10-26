@@ -115,7 +115,8 @@ json defaultConfig() {
                    {"compaction", true}, {"llm_summary", false},
                    {"auto_memory", true}, {"max_subagent_depth", 2}}},
         {"tools", {{"sandbox", true}, {"work_dir", ""}, {"dump_dir", ".af-dump"},
-                   {"persist_threshold", 20000}, {"permission_mode", "ask"}}},
+                   {"persist_threshold", 20000}, {"permission_mode", "ask"},
+                   {"workspace_root", ""}}},
         {"retrieval", {{"enabled", true}, {"top_k", 5}}},
         {"systemPrompt", kPrompt}};
 }
@@ -320,6 +321,26 @@ BudgetConfig makeBudget() {
     b.l3_search = std::max(4000, b.total_budget / 12);
     b.l5_history = std::max(8000, b.total_budget / 2);
     return b;
+}
+
+std::string workspaceForSession(const std::string& session_id) {
+    std::string configured;
+    {
+        std::lock_guard<std::mutex> lock(g_config_mutex);
+        configured = g_config["tools"].value("workspace_root", "");
+    }
+    fs::path root;
+    if (configured.empty()) {
+        root = utf8ToPath(g_sessions->conversationDir(session_id)) / "workspace";
+    } else {
+        root = utf8ToPath(resolveUserPath(configured));
+        if (!root.is_absolute()) root = g_root / root;
+    }
+    std::error_code ec;
+    fs::create_directories(root, ec);
+    fs::path canonical = fs::weakly_canonical(root, ec);
+    if (ec) canonical = fs::absolute(root, ec).lexically_normal();
+    return pathToUtf8(canonical);
 }
 
 std::string permissionPrefix(const std::string& tool, const json& args) {
@@ -747,7 +768,8 @@ int main(int argc, char* argv[]) {
     });
 
     svr.Get(R"(/api/sessions/([^/]+))", [](const httplib::Request& req, httplib::Response& res) {
-        auto session = g_sessions->loadSession(req.matches[1]);
+        std::string sid = httplib::detail::decode_url(req.matches[1], false);
+        auto session = g_sessions->loadSession(sid);
         if (!session) { sendJson(res, {{"status", "error"}}, 404); return; }
         json msgs = json::array();
         for (const auto& m : session->messages) msgs.push_back(messageToApiJson(m));
@@ -758,7 +780,8 @@ int main(int argc, char* argv[]) {
     svr.Get(R"(/api/sessions/([^/]+)/checkpoints)", [](const httplib::Request& req,
                                                        httplib::Response& res) {
         json arr = json::array();
-        for (const auto& cp : g_sessions->listCheckpoints(req.matches[1]))
+        std::string sid = httplib::detail::decode_url(req.matches[1], false);
+        for (const auto& cp : g_sessions->listCheckpoints(sid))
             arr.push_back({{"id", cp.id}, {"label", cp.label},
                            {"created_at", (long long)cp.created_at}, {"files", cp.files}});
         sendJson(res, arr);
@@ -768,7 +791,8 @@ int main(int argc, char* argv[]) {
                                                      httplib::Response& res) {
         json body = json::parse(req.body);
         std::string error;
-        bool ok = g_sessions->restoreCheckpoint(req.matches[1],
+        std::string sid = httplib::detail::decode_url(req.matches[1], false);
+        bool ok = g_sessions->restoreCheckpoint(sid,
                                                 body.value("checkpoint_id", ""), error);
         sendJson(res, {{"status", ok ? "ok" : "error"}, {"message", error}},
                  ok ? 200 : 400);
@@ -841,7 +865,6 @@ int main(int argc, char* argv[]) {
                 try {
                     json request_json = json::parse(*body);
                     session_id = request_json.value("session_id", "");
-                    if (session_id.empty()) session_id = nowId();
                     std::string mode = request_json.value("mode", "ask");
                     if (mode != "auto" && mode != "plan" && mode != "ask") mode = "ask";
                     std::vector<Message> messages = stripSystem(parseMessages(request_json));
@@ -849,6 +872,11 @@ int main(int argc, char* argv[]) {
                         send_event("error", {{"message", "没有收到有效消息"}});
                         sink.done();
                         return true;
+                    }
+                    // 新对话：目录名 = 日期_时间_首条消息主题
+                    if (session_id.empty()) {
+                        session_id = g_sessions->createSession(
+                            utf8Prefix(lastUser(messages), 40));
                     }
                     json cfg;
                     { std::lock_guard<std::mutex> lock(g_config_mutex); cfg = g_config; }
@@ -864,16 +892,25 @@ int main(int argc, char* argv[]) {
                     auto provider = std::make_shared<agentforge::MultiAPIProvider>(transport, api_cfg);
                     auto tracer = std::make_shared<JsonlTracer>();
 
+                    std::string workspace = workspaceForSession(session_id);
+
                     std::shared_ptr<ToolRegistry> tools;
                     if (mode == "plan") {
                         // Plan 模式：只读调研，绝不修改/执行
                         tools = g_tools->readOnlyView("Task");
+                        tools->setWorkspaceRoot(workspace);
                     } else {
                         tools = std::make_shared<ToolRegistry>();
-                        registerCoreTools(*tools, g_sandbox, std::shared_ptr<IUIPort>());
+                        SandboxConfig wsc;
+                        wsc.work_dir = workspace;
+                        wsc.timeout_seconds = 60;
+                        auto request_sandbox = createWindowsSandbox(wsc);
+                        registerCoreTools(*tools, request_sandbox,
+                                          std::shared_ptr<IUIPort>());
                         registerTaskTool(*tools, provider, tracer,
                                          cfg["agent"].value("max_subagent_depth", 2),
                                          nullptr, api_cfg.model);
+                        tools->setWorkspaceRoot(workspace);
                     }
 
                     // Auto：默认允许，但仍受显式 deny 规则约束；Ask 沿用全局弹窗门
@@ -898,6 +935,9 @@ int main(int argc, char* argv[]) {
                     } else {
                         mode_prompt += "\n当前是 ASK 模式：每次修改/执行前会请求用户确认。";
                     }
+                    mode_prompt += "\n当前工作区: " + workspace +
+                                   "\nWrite/Edit 只能写该目录；相对路径相对于工作区。"
+                                   "\nRead/Glob/Grep 仍可读取项目源码。";
                     context->setSystemPrompt(mode_prompt);
                     context->setProjectKnowledge(g_memory->loadProjectKnowledge() +
                                                  g_memory->loadMemory());

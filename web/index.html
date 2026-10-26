@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -718,6 +718,10 @@
                         <div class="info-label">端点</div>
                         <div class="info-value" id="infoEndpoint">加载中...</div>
                     </div>
+                    <div class="info-item">
+                        <div class="info-label">工作区</div>
+                        <div class="info-value" id="infoWorkspace">当前对话 workspace</div>
+                    </div>
                 </div>
 
                 <div class="info-section" id="usageSection" style="display: none;">
@@ -801,6 +805,15 @@
                 <input type="text" id="apiModel" placeholder="claude-sonnet-5-5">
                 <select id="apiModelSelect" style="display:none;margin-top:8px;width:100%;padding:8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;" onchange="pickModel(this.value)"></select>
                 <div id="modelHint" style="font-size:11px;color:#8b949e;margin-top:6px;"></div>
+            </div>
+            <div class="settings-section-title">工作区</div>
+            <div class="form-group">
+                <label>工作区路径（留空 = 当前对话 workspace）</label>
+                <input type="text" id="workspaceRoot" placeholder="例如 C:\Users\17102\Desktop\window程序设计课程_讲harnesss\AgentForge">
+                <div style="font-size:11px;color:#8b949e;margin-top:6px;">
+                    写/改/Bash 只能在此目录内；留空时自动使用
+                    <code>conversations/&lt;日期_主题&gt;/workspace/</code>。
+                </div>
             </div>
             <div class="settings-section-title">运行限制（随时可改）</div>
             <div class="form-grid">
@@ -887,6 +900,9 @@
                 // 更新侧边栏信息
                 document.getElementById('infoModel').textContent = config.api?.model || '未配置';
                 document.getElementById('infoEndpoint').textContent = config.api?.endpoint || '未配置';
+                const wsInfo = document.getElementById('infoWorkspace');
+                if (wsInfo) wsInfo.textContent =
+                    (config.tools && config.tools.workspace_root) || '当前对话 workspace';
 
                 // 更新设置面板
                 if (config.api) {
@@ -918,6 +934,8 @@
                 setCheck('compactionEnabled', agent.compaction, true);
                 setCheck('llmSummary', agent.llm_summary, false);
                 setCheck('autoMemory', agent.auto_memory, true);
+                const ws = document.getElementById('workspaceRoot');
+                if (ws) ws.value = (config.tools && config.tools.workspace_root) || '';
             } catch (e) {
                 console.error('加载配置失败', e);
             }
@@ -1403,6 +1421,7 @@
                 llm_summary: document.getElementById('llmSummary').checked,
                 auto_memory: document.getElementById('autoMemory').checked
             };
+            const workspaceRoot = document.getElementById('workspaceRoot').value.trim();
 
             try {
                 const res = await fetch('/api/config', {
@@ -1410,7 +1429,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         api: { endpoint, key, model, max_tokens: Math.max(0, num('maxOutputTokens', 4096)) },
-                        agent
+                        agent,
+                        tools: { workspace_root: workspaceRoot }
                     })
                 });
 

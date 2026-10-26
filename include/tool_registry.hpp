@@ -5,12 +5,14 @@
 #include "win_utf8.hpp"
 
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
+#include <regex>
 #include <sstream>
 #include <string>
 
@@ -112,6 +114,10 @@ public:
         functions_[def.name] = std::move(func);
     }
 
+    // 写/改/命令的工作区边界（空 = 不启用）
+    void setWorkspaceRoot(const std::string& root) { workspace_root_ = root; }
+    const std::string& workspaceRoot() const { return workspace_root_; }
+
     // 执行工具（带五步管线）
     ToolResult execute(const ToolCall& call,
                        const ToolInvocationContext* ctx = nullptr);
@@ -160,6 +166,10 @@ public:
 private:
     std::map<std::string, ToolDef> tools_;
     std::map<std::string, ToolFunction> functions_;
+    std::string workspace_root_;
+
+    static bool isPathInside(const std::filesystem::path& root, const std::filesystem::path& p);
+    std::string enforceWorkspace(ToolCall& call);
 
     static bool matchToolPattern(const std::string& name, const std::string& pattern);
     static std::string jsonTypeName(const json& value);
@@ -295,6 +305,83 @@ inline std::string ToolRegistry::persistLargeResult(
     }
 }
 
+inline bool ToolRegistry::isPathInside(const std::filesystem::path& root, const std::filesystem::path& p) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    auto canon = [&](const fs::path& x) {
+        fs::path y = fs::weakly_canonical(x, ec);
+        if (ec) {
+            ec.clear();
+            y = fs::absolute(x, ec).lexically_normal();
+        }
+        std::string s = y.generic_string();
+        for (char& c : s) c = (char)std::tolower((unsigned char)c);
+        while (s.size() > 1 && s.back() == '/') s.pop_back();
+        return s;
+    };
+    const std::string rs = canon(root);
+    const std::string ps = canon(p);
+    if (ps.size() < rs.size()) return false;
+    if (ps.compare(0, rs.size(), rs) != 0) return false;
+    return ps.size() == rs.size() || ps[rs.size()] == '/';
+}
+
+inline std::string ToolRegistry::enforceWorkspace(ToolCall& call) {
+    namespace fs = std::filesystem;
+    if (workspace_root_.empty()) return {};
+    const fs::path root = utf8ToPath(workspace_root_);
+    std::error_code ec;
+    fs::create_directories(root, ec);
+
+    if (call.name == "Write" || call.name == "Edit" || call.name == "Read") {
+        if (!call.arguments.is_object() || !call.arguments.contains("path") ||
+            !call.arguments["path"].is_string()) {
+            return {};
+        }
+        std::string raw = resolveUserPath(call.arguments["path"].get<std::string>());
+        fs::path p = utf8ToPath(raw);
+        const bool relative = !p.is_absolute();
+        if (relative) p = root / p;
+
+        if (call.name == "Read" && relative) {
+            // 读：优先读工作区里的同名文件；没有则回退项目目录
+            if (!fs::exists(p, ec)) return {};
+        }
+
+        fs::path abs = fs::weakly_canonical(p, ec);
+        if (ec) {
+            ec.clear();
+            abs = fs::absolute(p, ec).lexically_normal();
+        }
+        if (!isPathInside(root, abs)) {
+            return "路径不在工作区: " + pathToUtf8(abs) +
+                   "（工作区: " + workspace_root_ + "）";
+        }
+        call.arguments["path"] = pathToUtf8(abs);
+        return {};
+    }
+
+    if (call.name == "Bash" && call.arguments.is_object() &&
+        call.arguments.contains("command") &&
+        call.arguments["command"].is_string()) {
+        const std::string command = call.arguments["command"].get<std::string>();
+        if (command.find("..") != std::string::npos) {
+            return "Bash 命令包含上级目录 '..'，已拒绝（工作区: " +
+                   workspace_root_ + "）";
+        }
+        static const std::regex abs_path(R"(([A-Za-z]:[\\/][^\s"']+))");
+        for (std::sregex_iterator it(command.begin(), command.end(), abs_path), end;
+             it != end; ++it) {
+            fs::path p = utf8ToPath((*it)[1].str());
+            if (!isPathInside(root, p)) {
+                return "Bash 命令包含工作区外路径: " + (*it)[1].str() +
+                       "（工作区: " + workspace_root_ + "）";
+            }
+        }
+    }
+    return {};
+}
+
 inline ToolResult ToolRegistry::execute(const ToolCall& call,
                                         const ToolInvocationContext* ctx) {
     // 0. 查找
@@ -312,15 +399,22 @@ inline ToolResult ToolRegistry::execute(const ToolCall& call,
     auto dit = tools_.find(call.name);
     ToolDef def = (dit != tools_.end()) ? dit->second : ToolDef{call.name, "", {}, RiskLevel::Read};
 
+    // 工作区边界：Write/Edit 的相对路径落到 workspace，绝对路径越界直接拒绝
+    ToolCall effective = call;
+    std::string workspace_error = enforceWorkspace(effective);
+    if (!workspace_error.empty()) {
+        return ToolResult::error(call.id, workspace_error);
+    }
+
     // 1. Schema 校验
-    std::string validation = validateArgs(def, call.arguments);
+    std::string validation = validateArgs(def, effective.arguments);
     if (!validation.empty()) {
         return ToolResult::error(call.id, "参数不合法: " + validation);
     }
 
     // 2. 权限判定
     if (ctx && ctx->gate) {
-        Decision decision = ctx->gate->evaluate(def, call.arguments);
+        Decision decision = ctx->gate->evaluate(def, effective.arguments);
         if (decision == Decision::Deny) {
             std::string reason = ctx->gate->getDenyReason();
             return ToolResult::error(call.id, "被权限策略拒绝: " +
@@ -328,7 +422,7 @@ inline ToolResult ToolRegistry::execute(const ToolCall& call,
         }
         if (decision == Decision::Ask) {
             bool allowed = (ctx->ui != nullptr)
-                               ? ctx->ui->confirmTool(def.name, call.arguments)
+                               ? ctx->ui->confirmTool(def.name, effective.arguments)
                                : false;
             if (!allowed) {
                 return ToolResult::error(call.id,
@@ -340,7 +434,7 @@ inline ToolResult ToolRegistry::execute(const ToolCall& call,
     // 2.5 执行前钩子（例如文件检查点）
     if (ctx && ctx->before_execute) {
         try {
-            ctx->before_execute(call);
+            ctx->before_execute(effective);
         } catch (...) {
         }
     }
@@ -348,7 +442,7 @@ inline ToolResult ToolRegistry::execute(const ToolCall& call,
     // 3. 执行
     ToolResult result;
     try {
-        result = fit->second(call.arguments);
+        result = fit->second(effective.arguments);
     } catch (const json::exception& e) {
         return ToolResult::error(call.id, std::string("参数解析错误: ") + e.what());
     } catch (const std::exception& e) {

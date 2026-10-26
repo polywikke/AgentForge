@@ -8,6 +8,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -94,7 +95,7 @@ public:
 
     std::string createSession(const std::string& title = "") {
         Session session;
-        session.id = generateSessionId();
+        session.id = generateSessionId(title);
         session.created_at = getCurrentTimeMs();
         session.updated_at = session.created_at;
         session.title = title;
@@ -456,11 +457,46 @@ private:
         out << j.dump(2);
     }
 
-    static std::string generateSessionId() {
-        auto now = std::chrono::system_clock::now();
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      now.time_since_epoch()).count();
-        return std::to_string(ms);
+    static std::string sanitizeTopic(std::string topic) {
+        topic = sanitizeUtf8(topic);
+        std::string out;
+        bool last_sep = false;
+        for (unsigned char c : topic) {
+            if (c < 0x20 || c == 0x7f) continue;
+            const bool bad = c == '<' || c == '>' || c == ':' || c == '"' ||
+                             c == '/' || c == '\\' || c == '|' || c == '?' ||
+                             c == '*' || c == ' ';
+            if (bad) {
+                if (!last_sep) { out.push_back('_'); last_sep = true; }
+            } else {
+                out.push_back((char)c);
+                last_sep = false;
+            }
+        }
+        while (!out.empty() && (out.back() == '_' || out.back() == '.')) out.pop_back();
+        while (!out.empty() && (out.front() == '_' || out.front() == '.')) out.erase(out.begin());
+        if (out.empty()) out = "chat";
+        return utf8Prefix(out, 32);
+    }
+
+    std::string generateSessionId(const std::string& title) {
+        std::time_t now = std::time(nullptr);
+        std::tm local{};
+#ifdef _WIN32
+        localtime_s(&local, &now);
+#else
+        localtime_r(&now, &local);
+#endif
+        char stamp[32] = {0};
+        std::strftime(stamp, sizeof(stamp), "%Y%m%d_%H%M%S", &local);
+
+        const std::string base = std::string(stamp) + "_" + sanitizeTopic(title);
+        std::string id = base;
+        int n = 2;
+        while (std::filesystem::exists(utf8ToPath(sessionDir(id)))) {
+            id = base + "_" + std::to_string(n++);
+        }
+        return id;
     }
 
     static int64_t getCurrentTimeMs() {

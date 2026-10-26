@@ -345,6 +345,9 @@ SMOKE TEST PASSED
 - **历史会话**：完成一次对话后侧栏出现记录；点击后加载消息、设置 `currentSessionId`，继续发送会沿用同一会话。
 - **模型检测**：设置页 `🔍 检测模型` 请求真实中转 `/v1/models`，返回 9 个模型并显示下拉；切换模型保存后 key 保持不变。
 - **全部数字限制支持 0（不限）**：max_steps / max_total_tokens / max_context_tokens / max_tokens / time_limit / max_history / max_repeat / max_errors 均实测设为 0 后对话成功。
+- **对话目录命名**：新会话实测为 `20261026_181446_请写入测试文件`，中文主题保留、非法字符清理、路由 URL 解码正常。
+- **工作区**：默认写 `conversations/<目录>/workspace/`；自定义 `tools.workspace_root` 生效；
+  写 `C:\Windows\Temp\af_evil.txt` 被拒绝（`路径不在工作区`），文件未创建。
 - 静态检查 `tools\check_web_ui.py`：`[OK] index.html / setup.html`。
 
 ### 9.7 已知偏差（见 L1-L12 矩阵）

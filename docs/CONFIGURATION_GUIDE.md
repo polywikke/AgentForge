@@ -157,6 +157,7 @@ curl -s -X POST http://127.0.0.1:8080/api/execute \
 | `dump_dir` | `.af-dump` | 大工具结果落盘目录 |
 | `persist_threshold` | 20000 | 超过该字符数的工具结果落盘（Read 豁免） |
 | `permission_mode` | `ask` | `ask` 弹窗 / `allow_all` / `deny_all`；显式 deny 规则始终优先 |
+| `workspace_root` | 空 | 写/改/命令的工作区；空 = `conversations/<日期_主题>/workspace/` |
 
 沙箱行为（`sandbox_win.cpp`）：
 
@@ -178,7 +179,16 @@ curl -s -X POST http://127.0.0.1:8080/api/execute \
 - `arg_prefix` 对 Bash 匹配命令前缀；
 - 可在 Web 弹窗选“总是允许/总是拒绝”，也可手工编辑该文件后重启。
 
-其它 5 个文件工具（Read/Write/Edit/Glob/Grep）直接操作文件系统，当前**不经过沙箱**。
+文件工具：`Write/Edit` 只能写工作区（相对路径落到工作区，绝对路径越界拒绝）；
+`Read/Glob/Grep` 仍可读项目源码；`Bash` 的 cwd 设为工作区，并拒绝命令中的工作区外绝对路径和 `..`。
+
+工作区默认值：
+
+```text
+conversations/<YYYYMMDD_HHMMSS_主题>/workspace/
+```
+
+设置 `tools.workspace_root` 后使用指定目录（相对路径相对于项目根）。
 
 ### 6.1 路径写法
 

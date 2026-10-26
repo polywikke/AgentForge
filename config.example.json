@@ -50,7 +50,8 @@
     "work_dir": "",
     "permission_mode": "ask",
     "dump_dir": ".af-dump",
-    "persist_threshold": 20000
+    "persist_threshold": 20000,
+    "workspace_root": ""
   },
   "retrieval": {
     "enabled": true,

@@ -1,4 +1,4 @@
-﻿# AgentForge L1-L12 实现矩阵
+# AgentForge L1-L12 实现矩阵
 
 > 对应课程 L1-L12 阶段；状态以当前代码与验证记录为准。
 > 验证记录见 [VERIFICATION.md](VERIFICATION.md)，交接见 [../HANDOVER.md](../HANDOVER.md)。
@@ -92,7 +92,10 @@
 
 - 沙箱：`CreateProcess(SUSPENDED)` + `Job Object`（KILL_ON_JOB_CLOSE/ActiveProcessLimit/ProcessMemoryLimit）+ 超时 `TerminateJobObject`；危险命令黑名单、工作目录校验。
 - 权限：`.af-permissions.json`；内建 Read/Glob/Grep allow、Write/Edit/Bash ask；Deny 优先；Web 弹窗可“允许一次/总是允许/拒绝/总是拒绝”。
-- 注意：文件工具（Read/Write/Edit/Grep/Glob）不走沙箱的路径白名单（当前只对 Bash 生效）；这是已知取舍。
+- **工作区边界**：`tools.workspace_root` 为空 = `conversations/<日期_主题>/workspace/`；
+  `Write/Edit` 相对路径落到工作区，绝对路径越界拒绝；`Bash` cwd=工作区，
+  拒绝命令中的工作区外绝对路径和 `..`；`Read/Glob/Grep` 仍可读项目源码。
+- 注意：这是程序级路径校验，不是 OS 级文件系统沙箱；真正的强隔离需要 Windows Sandbox/容器。
 
 ## L7 有记忆（压缩）
 
@@ -133,7 +136,8 @@
 
 ## L10 能存档
 
-- 会话目录：`conversations/<id>/`（`README.md`、`meta.json`、`snapshot.json`、`events.jsonl`、`checkpoints/`、`trace.jsonl`、`artifacts/manifest.jsonl`）。
+- 会话目录：`conversations/<YYYYMMDD_HHMMSS_主题>/`（`README.md`、`meta.json`、`snapshot.json`、`events.jsonl`、`checkpoints/`、`trace.jsonl`、`artifacts/manifest.jsonl`、`workspace/`）。
+- 工作区：`tools.workspace_root` 为空时使用该目录下的 `workspace/`；Write/Edit/Bash 受工作区边界保护。
 - API：`/api/sessions`、`/api/sessions/{id}`、`/checkpoints`、`/restore`。
 - 检查点：Write/Edit 前快照目标文件；`restore` 回滚（已实测）。
 - 三层记忆：
