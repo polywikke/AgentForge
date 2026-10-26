@@ -1,7 +1,7 @@
 # AgentForge - Coding Agent Harness (L1-L12)
 
 > **状态**: ✅ L1-L12 全阶段功能已实现并集成到 Web 主程序，编译、自检、端到端验证通过
-> **主程序**: `bin/Release/agentforge_web.exe` ｜ **控制台版**: `bin/Release/agentforge_v2.exe`
+> **主程序**: `bin/Release/agentforge_web.exe`（构建后生成） ｜ **控制台版**: `bin/Release/agentforge_v2.exe`
 > **验证记录**: [docs/VERIFICATION.md](docs/VERIFICATION.md) ｜ **交接**: [HANDOVER.md](HANDOVER.md)
 
 一个面向代码仓库的 C++20 Coding Agent Harness：分层上下文、工具管线、六道闸门、
@@ -260,13 +260,12 @@ AgentForge/
 ├─ thirdparty/tree-sitter/   tree-sitter 0.25 + cpp grammar
 ├─ web/            index.html / setup.html
 ├─ tools/          mock_llm_server.py / smoke_test.ps1 / check_web_ui.py / fix_integrity.bat
-├─ docs/           L1-L12_MATRIX / VERIFICATION / CONFIGURATION_GUIDE / QUICK_START / images
-├─ bin/Release/    3 个 exe
+├─ docs/           L1-L12_MATRIX / VERIFICATION / CONFIGURATION_GUIDE / images
 └─ CMakeLists.txt / build_and_test.ps1 / quick_build.bat / run_server.bat
 ```
 
-> 早期重复实现与过时文档已删除；`src/` 中仍有一个未参与构建的
-> `wininet_http_transport.cpp`（被陈旧高权限编译进程锁定，重启后可删）。
+> 已清理 `build/`、`bin/`（编译产物）、测试会话、旧截图和重复的 QUICK_START；
+> 首次运行先执行 `quick_build.bat` 生成 `bin/Release/`。
 
 ## 📚 文档
 

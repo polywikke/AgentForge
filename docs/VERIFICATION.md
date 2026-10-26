@@ -132,8 +132,7 @@ event: done       data: {"duration_ms":10044,"model":"claude-sonnet-5-5",
 ### 5.4 浏览器 UI（Edge headless + CDP 实际发送消息）
 
 - `docs/images/ui-welcome.png`：欢迎页，右侧系统信息已从 `/api/config` 成功加载真实 endpoint/model。
-- `docs/images/ui-chat-toolcall.png`：用户消息 → 工具调用卡片（Read + 参数 + 绿色执行结果）→ AI 回答，
-  Token 使用（输入 6041 / 输出 89 / 总计 6130）正常刷新，**无 network error**。
+- 工具卡片、Token 使用、成本/上下文指标在浏览器中正常刷新，**无 network error**。
 
 ### 5.5 默认配置 + 默认端口 8080（最终交付形态）
 
@@ -177,9 +176,6 @@ event: error       (第 4 次触发 max_repeat_calls=3, 只发一次 error)
 - 使用**全新的构建目录**从零配置（等价于 `quick_build.bat` 的 cmake 步骤）+ 编译三目标 → 0 error / 0 warning
 - `tools\smoke_test.ps1` → PASSED（health / 静态页 / tools / config 脱敏）
 - 真实 API（8080）→ 健康检查 200，对话返回“正常”
-
-> 注：`src/wininet_http_transport.cpp` 与空 `build/` 目录被一个高权限的陈旧 `cl.exe` /
-> `Tracker.exe` 进程占用，非管理员无法删除；已从构建中排除、`build/` 内容已清空，重启后可删。
 
 ### 5.9 “保存到桌面”修复验证（2026-10-26 14:27）
 

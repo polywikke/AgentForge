@@ -2,7 +2,7 @@
 
 > **状态**: ✅ L1-L12 全阶段功能已实现并集成到 Web 主程序；编译、自检、Mock/真实 API 端到端验证通过
 > **版本**: v2.0（2026-10-26）
-> **主交付**: `bin/Release/agentforge_web.exe`
+> **主交付**: `bin/Release/agentforge_web.exe`（构建后生成）
 > **验证记录**: [docs/VERIFICATION.md](docs/VERIFICATION.md) ｜ **矩阵**: [docs/L1-L12_MATRIX.md](docs/L1-L12_MATRIX.md)
 
 ---
@@ -132,7 +132,8 @@ web/index.html ──SSE──> main_web_simple.cpp
 4. **会话恢复是"继续历史"**，不是进程级自动重放；检查点只回滚文件。
 5. **Anthropic 流式**未用真实 Anthropic Key 验收（无 Key），代码已实现并在失败时回退非流式。
 6. **插件 ABI / git diff / 向量嵌入**未实现（超出本轮 L1-L12 主线，见矩阵文档）。
-7. `src/wininet_http_transport.cpp` 与空 `build/` 目录被陈旧高权限进程锁定，重启后可删；不影响构建。
+7. 构建中间目录 `build/`、测试产物、旧截图和重复的 `docs/QUICK_START.md` 已清理；
+   重新构建请运行 `quick_build.bat`。
 
 ## 7. 常见问题
 
