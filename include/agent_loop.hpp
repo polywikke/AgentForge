@@ -54,7 +54,7 @@ struct LoopStats {
 // 六道闸门 (Guardrails)
 struct Guardrails {
     bool checkMaxSteps(int current, int max) const { return current < max; }
-    bool checkBudget(int used, int max) const { return used < max; }
+    bool checkBudget(int used, int max) const { return max <= 0 || used < max; }
     bool checkDuration(int64_t elapsed_ms, int max_ms) const {
         return elapsed_ms < max_ms;
     }

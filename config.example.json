@@ -41,7 +41,8 @@
     "compaction": true,
     "llm_summary": false,
     "auto_memory": true,
-    "max_subagent_depth": 2
+    "max_subagent_depth": 2,
+    "max_total_tokens": 500000
   },
   "tools": {
     "_comment": "sandbox=true 时 Bash 通过 Windows 沙箱执行（工作目录约束/超时/危险命令拦截）；work_dir 为空则使用项目根目录",

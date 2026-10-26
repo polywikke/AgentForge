@@ -109,7 +109,8 @@ json defaultConfig() {
                  {"model", "claude-sonnet-5-5"}, {"temperature", 0.7},
                  {"max_tokens", 4096}}},
         {"agent", {{"max_steps", 20}, {"time_limit_seconds", 300},
-                   {"max_context_tokens", 100000}, {"max_history_messages", 40},
+                   {"max_context_tokens", 100000}, {"max_total_tokens", 500000},
+                   {"max_history_messages", 40},
                    {"max_repeat_calls", 3}, {"max_consecutive_errors", 3},
                    {"compaction", true}, {"llm_summary", false},
                    {"auto_memory", true}, {"max_subagent_depth", 2}}},
@@ -930,7 +931,9 @@ int main(int argc, char* argv[]) {
 
                     LoopLimits limits;
                     limits.max_steps = cfg["agent"].value("max_steps", 20);
-                    limits.max_tokens = cfg["agent"].value("max_context_tokens", 100000);
+                    limits.max_tokens = cfg["agent"].value(
+                        "max_total_tokens",
+                        cfg["agent"].value("max_context_tokens", 100000));
                     limits.max_duration_sec = cfg["agent"].value("time_limit_seconds", 300);
                     limits.max_repeat_calls = cfg["agent"].value("max_repeat_calls", 3);
                     limits.max_consecutive_errors =

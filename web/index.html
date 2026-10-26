@@ -397,6 +397,34 @@
             border-color: #58a6ff;
         }
 
+        .settings-section-title {
+            margin: 22px 0 12px;
+            padding-top: 14px;
+            border-top: 1px solid #30363d;
+            color: #58a6ff;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .form-grid .form-group { margin-bottom: 10px; }
+
+        .check-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #c9d1d9;
+            margin: 8px 0;
+        }
+
+        .check-row input { width: auto; }
+
         .save-btn {
             width: 100%;
             background: #238636;
@@ -774,6 +802,45 @@
                 <select id="apiModelSelect" style="display:none;margin-top:8px;width:100%;padding:8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;" onchange="pickModel(this.value)"></select>
                 <div id="modelHint" style="font-size:11px;color:#8b949e;margin-top:6px;"></div>
             </div>
+            <div class="settings-section-title">运行限制（随时可改）</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>最大步数</label>
+                    <input type="number" id="maxSteps" min="1" max="200" value="20">
+                </div>
+                <div class="form-group">
+                    <label>累计 Token 预算（0=不限）</label>
+                    <input type="number" id="maxTotalTokens" min="0" step="1000" value="500000">
+                </div>
+                <div class="form-group">
+                    <label>上下文窗口 tokens</label>
+                    <input type="number" id="maxContextTokens" min="1000" step="1000" value="100000">
+                </div>
+                <div class="form-group">
+                    <label>单次输出 max_tokens</label>
+                    <input type="number" id="maxOutputTokens" min="1" max="32768" step="256" value="4096">
+                </div>
+                <div class="form-group">
+                    <label>时间上限（秒）</label>
+                    <input type="number" id="timeLimit" min="10" max="3600" step="10" value="300">
+                </div>
+                <div class="form-group">
+                    <label>历史消息上限</label>
+                    <input type="number" id="maxHistory" min="5" max="200" step="5" value="40">
+                </div>
+                <div class="form-group">
+                    <label>重复调用上限</label>
+                    <input type="number" id="maxRepeat" min="1" max="50" value="3">
+                </div>
+                <div class="form-group">
+                    <label>连续错误上限</label>
+                    <input type="number" id="maxErrors" min="1" max="50" value="3">
+                </div>
+            </div>
+            <label class="check-row"><input type="checkbox" id="compactionEnabled" checked> 自动压缩上下文</label>
+            <label class="check-row"><input type="checkbox" id="llmSummary"> 压缩时用模型写摘要（更贵）</label>
+            <label class="check-row"><input type="checkbox" id="autoMemory" checked> 自动写入长期记忆</label>
+
             <button class="save-btn" onclick="saveSettings()">保存设置</button>
         </div>
     </div>
@@ -830,6 +897,27 @@
                     const hint = document.getElementById('modelHint');
                     if (hint) hint.textContent = '';
                 }
+
+                const agent = config.agent || {};
+                const setVal = (id, v, fallback) => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = (v === undefined || v === null) ? fallback : v;
+                };
+                setVal('maxSteps', agent.max_steps, 20);
+                setVal('maxTotalTokens', agent.max_total_tokens, 500000);
+                setVal('maxContextTokens', agent.max_context_tokens, 100000);
+                setVal('maxOutputTokens', config.api?.max_tokens, 4096);
+                setVal('timeLimit', agent.time_limit_seconds, 300);
+                setVal('maxHistory', agent.max_history_messages, 40);
+                setVal('maxRepeat', agent.max_repeat_calls, 3);
+                setVal('maxErrors', agent.max_consecutive_errors, 3);
+                const setCheck = (id, v, fallback) => {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = (v === undefined || v === null) ? fallback : !!v;
+                };
+                setCheck('compactionEnabled', agent.compaction, true);
+                setCheck('llmSummary', agent.llm_summary, false);
+                setCheck('autoMemory', agent.auto_memory, true);
             } catch (e) {
                 console.error('加载配置失败', e);
             }
@@ -1299,12 +1387,30 @@
                 document.getElementById('apiModel').value = model;
             }
 
+            const num = (id, fallback) => {
+                const n = parseInt(document.getElementById(id).value, 10);
+                return Number.isFinite(n) ? n : fallback;
+            };
+            const agent = {
+                max_steps: Math.max(1, num('maxSteps', 20)),
+                max_total_tokens: Math.max(0, num('maxTotalTokens', 500000)),
+                max_context_tokens: Math.max(1000, num('maxContextTokens', 100000)),
+                time_limit_seconds: Math.max(10, num('timeLimit', 300)),
+                max_history_messages: Math.max(5, num('maxHistory', 40)),
+                max_repeat_calls: Math.max(1, num('maxRepeat', 3)),
+                max_consecutive_errors: Math.max(1, num('maxErrors', 3)),
+                compaction: document.getElementById('compactionEnabled').checked,
+                llm_summary: document.getElementById('llmSummary').checked,
+                auto_memory: document.getElementById('autoMemory').checked
+            };
+
             try {
                 const res = await fetch('/api/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        api: { endpoint, key, model }
+                        api: { endpoint, key, model, max_tokens: Math.max(1, num('maxOutputTokens', 4096)) },
+                        agent
                     })
                 });
 

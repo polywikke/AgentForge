@@ -1,4 +1,4 @@
-﻿# AgentForge - Coding Agent Harness (L1-L12)
+# AgentForge - Coding Agent Harness (L1-L12)
 
 > **状态**: ✅ L1-L12 全阶段功能已实现并集成到 Web 主程序，编译、自检、端到端验证通过
 > **主程序**: `bin/Release/agentforge_web.exe` ｜ **控制台版**: `bin/Release/agentforge_v2.exe`
@@ -53,6 +53,20 @@ conversations/<session_id>/
 ⚙️ 设置 → 填 endpoint/key → 点 **🔍 检测模型**：
 后端会请求 `/v1/models`（OpenAI 兼容）或 `/v1/models`（Anthropic），
 下拉选择后保存即可，不需要重启。检测只读取、不落盘；保存时才写 `config.json`。
+
+### 运行限制（Web 设置）
+
+⚙️ 设置 → **运行限制** 可直接改，点保存立即生效：
+
+- 最大步数
+- 累计 Token 预算（`max_total_tokens`，0 = 不限）
+- 上下文窗口 tokens
+- 单次输出 `max_tokens`
+- 时间上限 / 历史消息上限 / 重复调用 / 连续错误
+- 自动压缩、LLM 摘要、自动记忆
+
+> 简单任务也报“超出 token 预算”通常是 **累计预算** 太小（旧默认 100000），不是上下文超长。
+> 新默认是 `max_total_tokens=500000`，可在设置里随时调大或设为 0。
 
 前置条件：
 
@@ -167,7 +181,8 @@ SSE 事件：`start`、`stage`、`chunk`、`tool_call`、`tool_result`、
            "model": "your-model", "temperature": 0.7, "max_tokens": 4096 },
   "agent": {
     "max_steps": 20, "time_limit_seconds": 300,
-    "max_context_tokens": 100000, "max_history_messages": 40,
+    "max_context_tokens": 100000, "max_total_tokens": 500000,
+    "max_history_messages": 40,
     "max_repeat_calls": 3, "max_consecutive_errors": 3,
     "compaction": true, "llm_summary": false,
     "auto_memory": true, "max_subagent_depth": 2
