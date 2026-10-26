@@ -75,6 +75,29 @@ public:
         return sessionDir(id) + "/trace.jsonl";
     }
 
+    bool saveMetrics(const std::string& id, const json& metrics) {
+        try {
+            ensureSessionDir(id);
+            writeJson(sessionDir(id) + "/metrics.json", metrics);
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    json loadMetrics(const std::string& id) const {
+        try {
+            std::ifstream in(utf8ToPath(sessionDir(id) + "/metrics.json"),
+                             std::ios::binary);
+            if (!in) return json::object();
+            json j;
+            in >> j;
+            return j;
+        } catch (...) {
+            return json::object();
+        }
+    }
+
     // 记录本次对话实际写入/修改过的文件路径（真实文件仍在原位置）
     bool recordArtifact(const std::string& session_id, const std::string& path,
                         const std::string& tool) {

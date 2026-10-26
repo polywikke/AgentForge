@@ -45,9 +45,13 @@ conversations/<session_id>/
 ├─ snapshot.json             完整消息快照
 ├─ checkpoints/              Write/Edit 前文件备份
 ├─ trace.jsonl               L12 Trace
+├─ metrics.json              本次对话指标
 ├─ artifacts/manifest.jsonl  本次对话改动的文件路径
 └─ workspace/                Agent 默认写/改/执行目录
 ```
+
+「+ 新会话」只清空当前聊天视图并重置右侧指标，**不会删除服务器上的历史会话**；
+历史侧栏会保留，点旧会话即可重新加载。指标按会话保存（`metrics.json`）。
 
 ### 工作区
 

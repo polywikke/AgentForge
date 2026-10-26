@@ -1236,6 +1236,10 @@
                 const data = await res.json();
                 currentSessionId = data.id;
                 document.getElementById('infoSession').textContent = data.id;
+                resetMetrics(false);
+                if (data.metrics && data.metrics.usage) {
+                    applyMetrics(data.metrics);
+                }
                 conversationHistory = (data.messages || [])
                     .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
                     .map(m => ({ role: m.role, content: m.content }));
@@ -1251,30 +1255,71 @@
         }
 
         function newSession() {
+            // 只重置当前界面，不删除任何服务器端会话目录
             currentSessionId = null;
             conversationHistory = [];
             document.getElementById('chatMessages').innerHTML = '';
             document.getElementById('infoSession').textContent = '-';
-            addMessage('system', '已新建会话');
+            resetMetrics(true);
+            addMessage('system', '已新建会话（旧会话仍保留在右侧历史列表）');
+            loadSessions();
         }
 
         // ------------------------------------------------------------------
         // L12 指标
         // ------------------------------------------------------------------
-        async function loadMetrics() {
+        function resetMetrics(clearSession) {
+            const usage = document.getElementById('usageSection');
+            if (usage) usage.style.display = 'none';
+            const set = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = v;
+            };
+            set('infoInputTokens', '0');
+            set('infoOutputTokens', '0');
+            set('infoTotalTokens', '0');
+            set('infoCost', '$0.0000');
+            set('infoContext', '0');
+            set('infoCompactions', '0');
+            if (clearSession) set('infoSession', '-');
+        }
+
+        function applyMetrics(m) {
+            if (!m) return;
+            const usage = document.getElementById('usageSection');
+            if (m.usage) {
+                if (usage) usage.style.display = 'block';
+                const set = (id, v) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = v;
+                };
+                set('infoInputTokens', m.usage.prompt_tokens || 0);
+                set('infoOutputTokens', m.usage.completion_tokens || 0);
+                set('infoTotalTokens', m.usage.total_tokens || 0);
+            }
+            const set = (id, v) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = v;
+            };
+            set('infoCost', '$' + (m.cost_usd || 0).toFixed(4));
+            set('infoContext', m.context_tokens || 0);
+            set('infoCompactions', m.compactions || 0);
+            if (m.session_id) set('infoSession', m.session_id);
+        }
+
+        async function loadMetrics(sessionId = currentSessionId) {
+            if (!sessionId) {
+                resetMetrics(true);
+                return;
+            }
             try {
-                const res = await fetch('/api/metrics');
+                const res = await fetch('/api/metrics?session_id=' + encodeURIComponent(sessionId));
                 const m = await res.json();
-                if (!m || !m.usage) return;
-                document.getElementById('infoCost').textContent =
-                    '$' + (m.cost_usd || 0).toFixed(4);
-                document.getElementById('infoContext').textContent =
-                    m.context_tokens || 0;
-                document.getElementById('infoCompactions').textContent =
-                    m.compactions || 0;
-                if (m.session_id) {
-                    document.getElementById('infoSession').textContent = m.session_id;
+                if (!m || !m.usage) {
+                    resetMetrics(false);
+                    return;
                 }
+                applyMetrics(m);
             } catch (e) {
                 console.error('load metrics failed', e);
             }

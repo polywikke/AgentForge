@@ -774,7 +774,9 @@ int main(int argc, char* argv[]) {
         json msgs = json::array();
         for (const auto& m : session->messages) msgs.push_back(messageToApiJson(m));
         sendJson(res, {{"id", session->id}, {"title", session->title},
-                       {"tokens", session->total_usage.total()}, {"messages", msgs}});
+                       {"tokens", session->total_usage.total()},
+                       {"metrics", g_sessions->loadMetrics(sid)},
+                       {"messages", msgs}});
     });
 
     svr.Get(R"(/api/sessions/([^/]+)/checkpoints)", [](const httplib::Request& req,
@@ -817,9 +819,14 @@ int main(int argc, char* argv[]) {
         sendJson(res, {{"map", g_repo->renderMap(12000)}});
     });
 
-    svr.Get("/api/metrics", [](const httplib::Request&, httplib::Response& res) {
+    svr.Get("/api/metrics", [](const httplib::Request& req, httplib::Response& res) {
         json m;
-        { std::lock_guard<std::mutex> lock(g_metrics_mutex); m = g_metrics; }
+        if (req.has_param("session_id")) {
+            m = g_sessions->loadMetrics(req.get_param_value("session_id"));
+        } else {
+            std::lock_guard<std::mutex> lock(g_metrics_mutex);
+            m = g_metrics;
+        }
         auto r = g_repo->getStats();
         m["sessions"] = (int)g_sessions->listSessions().size();
         m["memory_facts"] = (int)g_memory->facts().size();
@@ -1030,6 +1037,7 @@ int main(int argc, char* argv[]) {
                     m["duration_ms"] = (long long)stats.duration_ms;
                     m["session_id"] = session_id;
                     m["trace_file"] = trace_file;
+                    g_sessions->saveMetrics(session_id, m);
                     {
                         std::lock_guard<std::mutex> lock(g_metrics_mutex);
                         g_metrics = m;

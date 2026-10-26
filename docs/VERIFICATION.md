@@ -348,6 +348,8 @@ SMOKE TEST PASSED
 - **对话目录命名**：新会话实测为 `20261026_181446_请写入测试文件`，中文主题保留、非法字符清理、路由 URL 解码正常。
 - **工作区**：默认写 `conversations/<目录>/workspace/`；自定义 `tools.workspace_root` 生效；
   写 `C:\Windows\Temp\af_evil.txt` 被拒绝（`路径不在工作区`），文件未创建。
+- **新会话不删历史**：两个会话创建后点“新会话”，侧栏仍有 3 条；服务器目录未删除。
+- **指标按会话**：`/api/metrics?session_id=` 返回对应会话 usage/cost/context；新会话 UI 成本/上下文/压缩归零。
 - 静态检查 `tools\check_web_ui.py`：`[OK] index.html / setup.html`。
 
 ### 9.7 已知偏差（见 L1-L12 矩阵）
