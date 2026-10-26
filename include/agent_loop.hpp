@@ -53,16 +53,17 @@ struct LoopStats {
 
 // 六道闸门 (Guardrails)
 struct Guardrails {
-    bool checkMaxSteps(int current, int max) const { return current < max; }
+    bool checkMaxSteps(int current, int max) const { return max <= 0 || current < max; }
     bool checkBudget(int used, int max) const { return max <= 0 || used < max; }
     bool checkDuration(int64_t elapsed_ms, int max_ms) const {
-        return elapsed_ms < max_ms;
+        return max_ms <= 0 || elapsed_ms < max_ms;
     }
     bool checkConsecutiveErrors(int count, int max) const {
-        return count < max;
+        return max <= 0 || count < max;
     }
     bool checkRepeatCalls(const std::map<std::string, int>& call_counts,
                           int max_repeats) const {
+        if (max_repeats <= 0) return true;
         for (const auto& [key, count] : call_counts) {
             if (count >= max_repeats) return false;
         }

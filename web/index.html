@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -805,36 +805,36 @@
             <div class="settings-section-title">运行限制（随时可改）</div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label>最大步数</label>
-                    <input type="number" id="maxSteps" min="1" max="200" value="20">
+                    <label>最大步数（0=不限）</label>
+                    <input type="number" id="maxSteps" min="0" max="200" value="20">
                 </div>
                 <div class="form-group">
                     <label>累计 Token 预算（0=不限）</label>
                     <input type="number" id="maxTotalTokens" min="0" step="1000" value="500000">
                 </div>
                 <div class="form-group">
-                    <label>上下文窗口 tokens</label>
-                    <input type="number" id="maxContextTokens" min="1000" step="1000" value="100000">
+                    <label>上下文窗口 tokens（0=不限）</label>
+                    <input type="number" id="maxContextTokens" min="0" step="1000" value="100000">
                 </div>
                 <div class="form-group">
-                    <label>单次输出 max_tokens</label>
-                    <input type="number" id="maxOutputTokens" min="1" max="32768" step="256" value="4096">
+                    <label>单次输出 max_tokens（0=模型默认）</label>
+                    <input type="number" id="maxOutputTokens" min="0" max="32768" step="256" value="4096">
                 </div>
                 <div class="form-group">
-                    <label>时间上限（秒）</label>
-                    <input type="number" id="timeLimit" min="10" max="3600" step="10" value="300">
+                    <label>时间上限（秒，0=不限）</label>
+                    <input type="number" id="timeLimit" min="0" max="3600" step="10" value="300">
                 </div>
                 <div class="form-group">
-                    <label>历史消息上限</label>
-                    <input type="number" id="maxHistory" min="5" max="200" step="5" value="40">
+                    <label>历史消息上限（0=不限）</label>
+                    <input type="number" id="maxHistory" min="0" max="200" step="5" value="40">
                 </div>
                 <div class="form-group">
-                    <label>重复调用上限</label>
-                    <input type="number" id="maxRepeat" min="1" max="50" value="3">
+                    <label>重复调用上限（0=不限）</label>
+                    <input type="number" id="maxRepeat" min="0" max="50" value="3">
                 </div>
                 <div class="form-group">
-                    <label>连续错误上限</label>
-                    <input type="number" id="maxErrors" min="1" max="50" value="3">
+                    <label>连续错误上限（0=不限）</label>
+                    <input type="number" id="maxErrors" min="0" max="50" value="3">
                 </div>
             </div>
             <label class="check-row"><input type="checkbox" id="compactionEnabled" checked> 自动压缩上下文</label>
@@ -1392,13 +1392,13 @@
                 return Number.isFinite(n) ? n : fallback;
             };
             const agent = {
-                max_steps: Math.max(1, num('maxSteps', 20)),
+                max_steps: Math.max(0, num('maxSteps', 20)),
                 max_total_tokens: Math.max(0, num('maxTotalTokens', 500000)),
-                max_context_tokens: Math.max(1000, num('maxContextTokens', 100000)),
-                time_limit_seconds: Math.max(10, num('timeLimit', 300)),
-                max_history_messages: Math.max(5, num('maxHistory', 40)),
-                max_repeat_calls: Math.max(1, num('maxRepeat', 3)),
-                max_consecutive_errors: Math.max(1, num('maxErrors', 3)),
+                max_context_tokens: Math.max(0, num('maxContextTokens', 100000)),
+                time_limit_seconds: Math.max(0, num('timeLimit', 300)),
+                max_history_messages: Math.max(0, num('maxHistory', 40)),
+                max_repeat_calls: Math.max(0, num('maxRepeat', 3)),
+                max_consecutive_errors: Math.max(0, num('maxErrors', 3)),
                 compaction: document.getElementById('compactionEnabled').checked,
                 llm_summary: document.getElementById('llmSummary').checked,
                 auto_memory: document.getElementById('autoMemory').checked
@@ -1409,7 +1409,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        api: { endpoint, key, model, max_tokens: Math.max(1, num('maxOutputTokens', 4096)) },
+                        api: { endpoint, key, model, max_tokens: Math.max(0, num('maxOutputTokens', 4096)) },
                         agent
                     })
                 });

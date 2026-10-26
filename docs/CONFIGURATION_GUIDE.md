@@ -130,17 +130,19 @@ curl -s -X POST http://127.0.0.1:8080/api/execute \
 
 | 字段 | 默认 | 说明 |
 |------|------|------|
-| `max_steps` | 20 | 单轮最多「模型调用 + 工具执行」步数 |
-| `time_limit_seconds` | 300 | 单轮总时长上限 |
-| `max_context_tokens` | 100000 | 上下文窗口预算（分层组装/压缩） |
-| `max_total_tokens` | 500000 | 单轮累计 token 预算（0 = 不限）；简单任务报“超出 token 预算”时调大或设 0 |
-| `max_history_messages` | 40 | 发送给模型的历史消息上限（只保留最近 N 条，且从 user 开始） |
-| `max_repeat_calls` | 3 | 同一工具 + 同一参数的最大重复次数（防死循环） |
-| `max_consecutive_errors` | 3 | 连续模型错误上限（L6 闸门 4） |
+| `max_steps` | 20 | 单轮最多「模型调用 + 工具执行」步数；0 = 不限 |
+| `time_limit_seconds` | 300 | 单轮总时长上限；0 = 不限 |
+| `max_context_tokens` | 100000 | 上下文窗口预算（分层组装/压缩）；0 = 不限（关闭预算触发压缩） |
+| `max_total_tokens` | 500000 | 单轮累计 token 预算；0 = 不限 |
+| `max_history_messages` | 40 | 发送给模型的历史消息上限；0 = 不限 |
+| `max_repeat_calls` | 3 | 同一工具 + 同一参数的最大重复次数；0 = 不限 |
+| `max_consecutive_errors` | 3 | 连续模型错误上限；0 = 不限 |
 | `compaction` | true | 是否在调用模型前自动压缩上下文 |
 | `llm_summary` | false | 压缩时是否用模型写摘要（true 会产生额外 token；false 用抽取式） |
 | `auto_memory` | true | 任务成功后是否写入 MEMORY.md |
 | `max_subagent_depth` | 2 | Task 子代理最大递归深度 |
+
+`api.max_tokens=0` 表示不发送 `max_tokens` 字段，交给模型默认/最大输出。
 
 达到步数上限时仍会返回已完成的内容，`done.outcome` 为 `max_steps`。
 

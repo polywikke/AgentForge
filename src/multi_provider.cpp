@@ -1,4 +1,4 @@
-#include "multi_provider.hpp"
+﻿#include "multi_provider.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -418,7 +418,7 @@ json MultiAPIProvider::buildRequestBody(const ChatRequest& request, bool stream)
 json MultiAPIProvider::buildAnthropicRequest(const ChatRequest& request, bool stream) const {
     json req;
     req["model"] = config_.model;
-    req["max_tokens"] = config_.max_tokens;
+    if (config_.max_tokens > 0) req["max_tokens"] = config_.max_tokens;
     req["temperature"] = config_.temperature;
     if (stream) req["stream"] = true;
 
@@ -490,7 +490,7 @@ json MultiAPIProvider::buildAnthropicRequest(const ChatRequest& request, bool st
 json MultiAPIProvider::buildOpenAIRequest(const ChatRequest& request, bool stream) const {
     json req;
     req["model"] = config_.model;
-    req["max_tokens"] = config_.max_tokens;
+    if (config_.max_tokens > 0) req["max_tokens"] = config_.max_tokens;
     req["temperature"] = config_.temperature;
     if (stream) {
         req["stream"] = true;

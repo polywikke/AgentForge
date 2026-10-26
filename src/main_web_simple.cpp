@@ -306,7 +306,16 @@ std::string nowId() {
 
 BudgetConfig makeBudget() {
     BudgetConfig b;
-    b.total_budget = g_config["agent"].value("max_context_tokens", 100000);
+    int ctx = g_config["agent"].value("max_context_tokens", 100000);
+    if (ctx <= 0) {
+        // 0 = 不限：给一个足够大的预算，同时限制地图/检索，避免启动时拉满内存
+        b.total_budget = 1000000000;
+        b.l2_repo_map = 16000;
+        b.l3_search = 12000;
+        b.l5_history = 1000000000;
+        return b;
+    }
+    b.total_budget = ctx;
     b.l2_repo_map = std::max(4000, b.total_budget / 12);
     b.l3_search = std::max(4000, b.total_budget / 12);
     b.l5_history = std::max(8000, b.total_budget / 2);
