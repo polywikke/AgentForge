@@ -1,0 +1,58 @@
+{
+  "_comment": "AgentForge 配置模板：复制为 config.json 后填写 api.key / endpoint / model",
+  "_provider_examples": {
+    "anthropic": {
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    "openai": {
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4o"
+    },
+    "deepseek": {
+      "endpoint": "https://api.deepseek.com/v1/chat/completions",
+      "model": "deepseek-chat"
+    },
+    "custom": {
+      "endpoint": "https://your-proxy.com/v1/chat/completions",
+      "model": "your-model-name"
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "web_root": "./web"
+  },
+  "api": {
+    "provider": "openai",
+    "endpoint": "https://api.openai.com/v1/chat/completions",
+    "key": "your-api-key-here",
+    "model": "gpt-4o",
+    "temperature": 0.7,
+    "max_tokens": 4096
+  },
+  "agent": {
+    "max_steps": 20,
+    "time_limit_seconds": 300,
+    "max_context_tokens": 100000,
+    "max_history_messages": 40,
+    "max_repeat_calls": 3,
+    "max_consecutive_errors": 3,
+    "compaction": true,
+    "llm_summary": false,
+    "auto_memory": true,
+    "max_subagent_depth": 2
+  },
+  "tools": {
+    "_comment": "sandbox=true 时 Bash 通过 Windows 沙箱执行（工作目录约束/超时/危险命令拦截）；work_dir 为空则使用项目根目录",
+    "sandbox": true,
+    "work_dir": "",
+    "permission_mode": "ask",
+    "dump_dir": ".af-dump",
+    "persist_threshold": 20000
+  },
+  "retrieval": {
+    "enabled": true,
+    "top_k": 5
+  }
+}

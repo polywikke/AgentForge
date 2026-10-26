@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentForge - AI Coding Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部标题栏 */
+        .header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #58a6ff;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .settings-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .settings-btn:hover {
+            background: #30363d;
+        }
+
+        /* 模式切换：Auto / Ask / Plan */
+        .mode-switch {
+            display: flex;
+            gap: 4px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 7px;
+            padding: 3px;
+        }
+
+        .mode-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: #8b949e;
+            padding: 4px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .mode-btn:hover { color: #c9d1d9; }
+
+        .mode-btn.active {
+            background: #1f6feb;
+            border-color: #1f6feb;
+            color: #fff;
+        }
+
+        .mode-hint {
+            color: #8b949e;
+            font-size: 11px;
+            max-width: 220px;
+        }
+
+        /* 主体区域 */
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* 对话区域 */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0d1117;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 800px;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: #1f6feb;
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background: #238636;
+            color: white;
+        }
+
+        .message-content {
+            background: #161b22;
+            border: 1px solid #30363d;
+            padding: 12px 16px;
+            border-radius: 8px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .message.user .message-content {
+            background: #1f6feb;
+            border-color: #1f6feb;
+            color: white;
+        }
+
+        .message.system {
+            align-self: center;
+            opacity: 0.6;
+            font-size: 13px;
+        }
+
+        .message.system .message-content {
+            background: transparent;
+            border: none;
+            font-style: italic;
+        }
+
+        /* Loading animation */
+        .loading {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .loading span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #58a6ff;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .loading span:nth-child(1) { animation-delay: -0.32s; }
+        .loading span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* 输入区域 */
+        .chat-input {
+            border-top: 1px solid #30363d;
+            background: #161b22;
+            padding: 16px 24px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .input-wrapper textarea {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: none;
+            min-height: 44px;
+            max-height: 200px;
+        }
+
+        .input-wrapper textarea:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .send-btn {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: #2ea043;
+        }
+
+        .send-btn:disabled {
+            background: #21262d;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 300px;
+            background: #161b22;
+            border-left: 1px solid #30363d;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar.hidden {
+            display: none;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #30363d;
+            font-weight: 600;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .info-section {
+            margin-bottom: 24px;
+        }
+
+        .info-section h3 {
+            font-size: 13px;
+            color: #8b949e;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .info-item {
+            background: #0d1117;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .info-label {
+            color: #8b949e;
+            font-size: 12px;
+        }
+
+        .info-value {
+            color: #c9d1d9;
+            margin-top: 4px;
+            word-break: break-all;
+        }
+
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 400px;
+            background: #161b22;
+            border-left: 1px solid #30363d;
+            transform: translateX(100%);
+            transition: transform 0.3s;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .settings-panel.open {
+            transform: translateX(0);
+        }
+
+        .settings-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .settings-header h2 {
+            font-size: 18px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #8b949e;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+        }
+
+        .settings-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #c9d1d9;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .save-btn {
+            width: 100%;
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .save-btn:hover {
+            background: #2ea043;
+        }
+
+        /* 欢迎屏幕 */
+        .welcome {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 48px;
+        }
+
+        .welcome h2 {
+            font-size: 32px;
+            margin-bottom: 16px;
+            color: #58a6ff;
+        }
+
+        .welcome p {
+            font-size: 16px;
+            color: #8b949e;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .welcome-examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 32px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .example-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            padding: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+        }
+
+        .example-card:hover {
+            border-color: #58a6ff;
+            transform: translateY(-2px);
+        }
+
+        .example-card h4 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #58a6ff;
+        }
+
+        .example-card p {
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                z-index: 999;
+                transform: translateX(100%);
+                transition: transform 0.3s;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .settings-panel {
+                width: 100%;
+            }
+        }
+
+        /* 工具调用卡片样式 */
+        .tool-call-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px auto;
+            max-width: 600px;
+            font-size: 13px;
+        }
+
+        .tool-header {
+            color: #58a6ff;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .tool-params {
+            background: #0d1117;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .tool-result {
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .tool-result.pending {
+            background: #1f2937;
+            color: #9ca3af;
+        }
+
+        .tool-result.success {
+            background: #1a7f37;
+            color: white;
+        }
+
+        .tool-result.error {
+            background: #d73a49;
+            color: white;
+        }
+
+        /* L9/L10/L12: 权限弹窗 / 会话 / 指标 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-box {
+            width: min(560px, 92vw);
+            background: var(--surface-1, #111827);
+            border: 1px solid var(--border, #2d3748);
+            border-radius: 12px;
+            padding: 20px;
+            color: var(--text-primary, #e5e7eb);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+        .modal-box h3 { margin-top: 0; }
+        .modal-box pre {
+            max-height: 220px;
+            overflow: auto;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 10px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+        .modal-actions button {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border, #374151);
+            background: var(--surface-2, #1f2937);
+            color: inherit;
+            cursor: pointer;
+        }
+        .modal-actions button.allow { background: #166534; border-color: #166534; }
+        .modal-actions button.deny { background: #991b1b; border-color: #991b1b; }
+        .stop-btn {
+            background: #b42318;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        .session-item {
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.85;
+        }
+        .session-item:hover { background: rgba(255, 255, 255, 0.08); }
+        .mini-btn {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border, #374151);
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            margin-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <div class="header">
+        <h1>🤖 AgentForge</h1>
+        <div class="status">
+            <div class="status-dot"></div>
+            <span id="statusText">就绪</span>
+            <div class="mode-switch" title="Auto: 自主执行；Ask: 工具前确认；Plan: 只读规划">
+                <button class="mode-btn" id="modeAuto" onclick="setMode('auto')">Auto</button>
+                <button class="mode-btn" id="modeAsk" onclick="setMode('ask')">Ask</button>
+                <button class="mode-btn" id="modePlan" onclick="setMode('plan')">Plan</button>
+            </div>
+            <span class="mode-hint" id="modeHint">Ask：修改/执行前确认</span>
+            <button class="settings-btn" onclick="toggleSettings()">⚙️ 设置</button>
+        </div>
+    </div>
+
+    <!-- 主体区域 -->
+    <div class="main">
+        <!-- 对话区域 -->
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <!-- 欢迎屏幕 -->
+                <div class="welcome" id="welcomeScreen">
+                    <h2>👋 欢迎使用 AgentForge</h2>
+                    <p>一个强大的 AI 编程助手，帮助你完成各种开发任务</p>
+
+                    <div class="welcome-examples">
+                        <div class="example-card" onclick="sendExample('解释一下 Python 的装饰器')">
+                            <h4>💡 解释概念</h4>
+                            <p>解释一下 Python 的装饰器</p>
+                        </div>
+                        <div class="example-card" onclick="sendExample('写一个快速排序算法')">
+                            <h4>📝 编写代码</h4>
+                            <p>写一个快速排序算法</p>
+                        </div>
+                        <div class="example-card" onclick="sendExample('如何优化数据库查询性能？')">
+                            <h4>🔍 解决问题</h4>
+                            <p>如何优化数据库查询性能？</p>
+                        </div>
+                        <div class="example-card" onclick="sendExample('帮我 review 这段代码')">
+                            <h4>🔧 代码审查</h4>
+                            <p>帮我 review 这段代码</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="chat-input">
+                <div class="input-wrapper">
+                    <textarea
+                        id="userInput"
+                        placeholder="输入你的问题... (Shift+Enter 换行，Enter 发送)"
+                        onkeydown="handleKeyPress(event)"></textarea>
+                    <button class="stop-btn" id="stopBtn" onclick="cancelRun()" style="display:none;">停止</button>
+                    <button class="send-btn" onclick="sendMessage()" id="sendBtn">
+                        发送
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 侧边栏 -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">系统信息</div>
+            <div class="sidebar-content">
+                <div class="info-section">
+                    <h3>API 配置</h3>
+                    <div class="info-item">
+                        <div class="info-label">模型</div>
+                        <div class="info-value" id="infoModel">加载中...</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">端点</div>
+                        <div class="info-value" id="infoEndpoint">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="info-section" id="usageSection" style="display: none;">
+                    <h3>Token 使用</h3>
+                    <div class="info-item">
+                        <div class="info-label">输入</div>
+                        <div class="info-value" id="infoInputTokens">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">输出</div>
+                        <div class="info-value" id="infoOutputTokens">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">总计</div>
+                        <div class="info-value" id="infoTotalTokens">0</div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>运行指标 (L12)</h3>
+                    <div class="info-item">
+                        <div class="info-label">成本估算</div>
+                        <div class="info-value" id="infoCost">$0.0000</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">上下文 tokens</div>
+                        <div class="info-value" id="infoContext">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">压缩次数</div>
+                        <div class="info-value" id="infoCompactions">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">会话</div>
+                        <div class="info-value" id="infoSession">-</div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>历史会话 (L10)</h3>
+                    <button class="mini-btn" onclick="newSession()">+ 新会话</button>
+                    <button class="mini-btn" onclick="loadSessions()">刷新</button>
+                    <div id="sessionList" style="max-height: 180px; overflow-y: auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 权限弹窗 (L6/L9) -->
+    <div class="modal-overlay" id="permissionModal">
+        <div class="modal-box">
+            <h3>🔐 权限确认</h3>
+            <p id="permissionTitle">Agent 请求执行工具</p>
+            <pre id="permissionArgs"></pre>
+            <div class="modal-actions">
+                <button class="allow" onclick="answerPermission('allow_once')">允许一次</button>
+                <button class="allow" onclick="answerPermission('always_allow')">总是允许</button>
+                <button class="deny" onclick="answerPermission('deny_once')">拒绝</button>
+                <button class="deny" onclick="answerPermission('always_deny')">总是拒绝</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div class="settings-panel" id="settingsPanel">
+        <div class="settings-header">
+            <h2>设置</h2>
+            <button class="close-btn" onclick="toggleSettings()">&times;</button>
+        </div>
+        <div class="settings-body">
+            <div class="form-group">
+                <label>API 端点</label>
+                <input type="text" id="apiEndpoint" placeholder="https://api.example.com/v1/chat/completions">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="apiKey" placeholder="sk-...">
+            </div>
+            <div class="form-group">
+                <label>模型 <button class="mini-btn" onclick="detectModels()">🔍 检测模型</button></label>
+                <input type="text" id="apiModel" placeholder="claude-sonnet-5-5">
+                <select id="apiModelSelect" style="display:none;margin-top:8px;width:100%;padding:8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;" onchange="pickModel(this.value)"></select>
+                <div id="modelHint" style="font-size:11px;color:#8b949e;margin-top:6px;"></div>
+            </div>
+            <button class="save-btn" onclick="saveSettings()">保存设置</button>
+        </div>
+    </div>
+
+    <script>
+        let config = null;
+        let conversationHistory = []; // 对话历史
+        let currentSessionId = null;
+        let currentRequestId = null;
+        let currentAbortController = null;
+        let pendingPermissionId = null;
+        let currentMode = localStorage.getItem('af_mode') || 'ask';
+
+        const MODE_HINTS = {
+            auto: 'Auto：自主执行，不再逐步确认',
+            ask: 'Ask：修改/执行前确认',
+            plan: 'Plan：只读调研，不写文件/不执行命令'
+        };
+
+        function applyMode(mode) {
+            currentMode = ['auto', 'ask', 'plan'].includes(mode) ? mode : 'ask';
+            localStorage.setItem('af_mode', currentMode);
+            for (const m of ['auto', 'ask', 'plan']) {
+                const btn = document.getElementById('mode' + m[0].toUpperCase() + m.slice(1));
+                if (btn) btn.classList.toggle('active', m === currentMode);
+            }
+            const hint = document.getElementById('modeHint');
+            if (hint) hint.textContent = MODE_HINTS[currentMode];
+            const status = document.getElementById('statusText');
+            if (status) status.textContent = currentMode === 'auto' ? 'Auto' :
+                                               currentMode === 'plan' ? 'Plan' : '就绪';
+        }
+
+        function setMode(mode) {
+            applyMode(mode);
+        }
+
+        // 加载配置
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                config = await res.json();
+
+                // 更新侧边栏信息
+                document.getElementById('infoModel').textContent = config.api?.model || '未配置';
+                document.getElementById('infoEndpoint').textContent = config.api?.endpoint || '未配置';
+
+                // 更新设置面板
+                if (config.api) {
+                    document.getElementById('apiEndpoint').value = config.api.endpoint || '';
+                    document.getElementById('apiModel').value = config.api.model || '';
+                }
+            } catch (e) {
+                console.error('加载配置失败', e);
+            }
+        }
+
+        // 发送消息（流式版本）
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // 添加到对话历史
+            conversationHistory.push({
+                role: 'user',
+                content: message
+            });
+
+            // 隐藏欢迎屏幕
+            const welcomeScreen = document.getElementById('welcomeScreen');
+            if (welcomeScreen) {
+                welcomeScreen.remove();
+            }
+
+            // 显示用户消息
+            addMessage('user', message);
+
+            // 清空输入框
+            input.value = '';
+            input.style.height = 'auto';
+
+            // 禁用发送按钮
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            sendBtn.textContent = '发送中...';
+            const stopBtn = document.getElementById('stopBtn');
+            stopBtn.style.display = 'inline-block';
+
+            // 创建状态消息（灰色提示，居中）
+            let statusMsgId = addMessage('system', '');
+            let statusEl = document.getElementById(statusMsgId);
+
+            // 预创建 AI 消息容器（但先隐藏）
+            let assistantMsgId = addMessage('assistant', '');
+            let assistantEl = document.getElementById(assistantMsgId);
+            assistantEl.style.display = 'none';  // 先隐藏
+
+            let fullResponse = '';
+            let hasStartedStreaming = false;
+            let streamError = false;
+            let errorShown = false;
+            const controller = new AbortController();
+            currentAbortController = controller;
+            const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+            try {
+                const response = await fetch('/api/execute-stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        messages: conversationHistory,  // 发送完整对话历史
+                        session_id: currentSessionId || undefined,
+                        mode: currentMode
+                    })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // 按双换行分割完整的 SSE 消息
+                    const messages = buffer.split('\n\n');
+                    buffer = messages.pop(); // 保留最后一个未完成的
+
+                    for (const msg of messages) {
+                        if (!msg.trim()) continue;
+
+                        let eventType = '';
+                        let eventData = '';
+
+                        const lines = msg.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('event:')) {
+                                eventType = line.substring(6).trim();
+                            } else if (line.startsWith('data:')) {
+                                eventData = line.substring(5).trim();
+                            }
+                        }
+
+                        if (!eventData) continue;
+
+                        try {
+                            const data = JSON.parse(eventData);
+
+                            console.log('[SSE] eventType:', eventType, 'data:', data);
+
+                            // 根据事件类型处理
+                            if (eventType === 'start') {
+                                currentRequestId = data.request_id || null;
+                            } else if (eventType === 'permission_request') {
+                                showPermission(data);
+                            } else if (eventType === 'stage') {
+                                // 更新状态提示（只在还没开始流式输出时显示）
+                                console.log('[SSE stage] hasStartedStreaming:', hasStartedStreaming, 'statusEl exists:', !!statusEl);
+                                if (!hasStartedStreaming && statusEl) {
+                                    console.log('[SSE stage] Updating status to:', data.message);
+                                    statusEl.querySelector('.message-content').textContent = data.message;
+                                }
+                            } else if (eventType === 'chunk') {
+                                // 首次收到内容块，隐藏状态，显示 AI 消息
+                                console.log('[SSE chunk] content:', data.content);
+                                if (!hasStartedStreaming) {
+                                    console.log('[SSE chunk] First chunk received, hiding status, showing AI message');
+                                    hasStartedStreaming = true;
+                                    if (statusEl) {
+                                        statusEl.remove();
+                                        statusEl = null;
+                                    }
+                                    assistantEl.style.display = 'flex';
+                                }
+
+                                // 追加内容
+                                fullResponse += data.content;
+                                assistantEl.querySelector('.message-content').textContent = fullResponse;
+
+                                // 自动滚动
+                                const messages = document.getElementById('chatMessages');
+                                messages.scrollTop = messages.scrollHeight;
+                            } else if (eventType === 'tool_call') {
+                                // 显示工具调用（插入到回答前面，保持时间顺序）
+                                console.log('[SSE tool_call]:', data);
+                                addToolCallCard(data.name, data.arguments, assistantEl);
+                            } else if (eventType === 'tool_result') {
+                                // 显示工具结果
+                                console.log('[SSE tool_result]:', data);
+                                updateLastToolCard(data.success, data.content);
+                            } else if (eventType === 'done') {
+                                // 完成，将 AI 回复添加到对话历史
+                                console.log('[SSE done] usage:', data.usage);
+                                if (fullResponse) {
+                                    conversationHistory.push({
+                                        role: 'assistant',
+                                        content: fullResponse
+                                    });
+                                    console.log('[History] Added assistant message. Total messages:', conversationHistory.length);
+                                }
+
+                                // 更新统计
+                                if (data.usage) {
+                                    document.getElementById('usageSection').style.display = 'block';
+                                    document.getElementById('infoInputTokens').textContent = data.usage.prompt_tokens || 0;
+                                    document.getElementById('infoOutputTokens').textContent = data.usage.completion_tokens || 0;
+                                    document.getElementById('infoTotalTokens').textContent = data.usage.total_tokens || 0;
+                                }
+                                if (data.session_id) {
+                                    currentSessionId = data.session_id;
+                                    document.getElementById('infoSession').textContent = data.session_id;
+                                }
+                                document.getElementById('infoCost').textContent =
+                                    '$' + (data.cost_usd || 0).toFixed(4);
+                                document.getElementById('infoContext').textContent =
+                                    data.context_tokens || 0;
+                                document.getElementById('infoCompactions').textContent =
+                                    data.compactions || 0;
+                                loadSessions();
+                                loadMetrics();
+                            } else if (eventType === 'error') {
+                                // 错误处理：记录错误并主动结束流，避免按钮一直“发送中”
+                                console.log('[SSE error]:', data.message);
+                                streamError = true;
+                                errorShown = true;
+                                hidePermission();
+                                if (statusEl) { statusEl.remove(); statusEl = null; }
+                                if (assistantEl) { assistantEl.remove(); assistantEl = null; }
+                                addMessage('system', '❌ 错误: ' + (data.message || '未知错误'));
+                                try { await reader.cancel(); } catch (_) {}
+                                break;
+                            }
+                        } catch (e) {
+                            console.error('JSON parse error:', e, 'data:', eventData);
+                        }
+                    }
+                    if (streamError) break;
+                }
+
+                // 清理
+                if (statusEl) statusEl.remove();
+
+            } catch (e) {
+                console.error('Stream error:', e);
+                if (statusEl) statusEl.remove();
+                if (assistantEl && !hasStartedStreaming) assistantEl.remove();
+                if (!errorShown) {
+                    const msg = e.name === 'AbortError'
+                        ? '请求超时或已中止（可重试）'
+                        : e.message;
+                    addMessage('system', '❌ 网络错误: ' + msg);
+                }
+            } finally {
+                clearTimeout(timeoutId);
+                currentAbortController = null;
+                sendBtn.disabled = false;
+                sendBtn.textContent = '发送';
+                const stop = document.getElementById('stopBtn');
+                stop.style.display = 'none';
+                currentRequestId = null;
+                hidePermission();
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // L6/L9 权限弹窗
+        // ------------------------------------------------------------------
+        function showPermission(data) {
+            pendingPermissionId = data.id;
+            document.getElementById('permissionTitle').textContent =
+                'Agent 请求执行工具: ' + (data.tool || '(confirm)');
+            document.getElementById('permissionArgs').textContent =
+                JSON.stringify(data.arguments || {}, null, 2);
+            document.getElementById('permissionModal').classList.add('open');
+        }
+
+        function hidePermission() {
+            pendingPermissionId = null;
+            document.getElementById('permissionModal').classList.remove('open');
+        }
+
+        async function answerPermission(decision) {
+            if (!pendingPermissionId) return;
+            const id = pendingPermissionId;
+            hidePermission();
+            try {
+                await fetch('/api/permission', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id, decision: decision })
+                });
+            } catch (e) {
+                console.error('permission reply failed', e);
+            }
+        }
+
+        // L6 取消
+        async function cancelRun() {
+            if (!currentRequestId) return;
+            try {
+                await fetch('/api/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ request_id: currentRequestId })
+                });
+            } catch (e) {
+                console.error('cancel failed', e);
+            }
+            // 主动断开本地 SSE 读取，按钮立即恢复
+            if (currentAbortController) {
+                try { currentAbortController.abort(); } catch (_) {}
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // L10 会话
+        // ------------------------------------------------------------------
+        async function loadSessions() {
+            try {
+                const res = await fetch('/api/sessions');
+                const sessions = await res.json();
+                const box = document.getElementById('sessionList');
+                box.innerHTML = '';
+                if (!sessions.length) {
+                    box.textContent = '（暂无会话；完成一次对话后会自动出现）';
+                    return;
+                }
+                for (const s of sessions.slice(0, 20)) {
+                    const div = document.createElement('div');
+                    div.className = 'session-item';
+                    div.textContent = (s.title || s.id) + ' · ' + (s.message_count || 0) + ' 条';
+                    div.title = 'id=' + s.id + ' tokens=' + (s.tokens || 0);
+                    div.onclick = () => loadSession(s.id);
+                    box.appendChild(div);
+                }
+            } catch (e) {
+                console.error('load sessions failed', e);
+            }
+        }
+
+        async function loadSession(id) {
+            try {
+                const res = await fetch('/api/sessions/' + encodeURIComponent(id));
+                if (!res.ok) return;
+                const data = await res.json();
+                currentSessionId = data.id;
+                document.getElementById('infoSession').textContent = data.id;
+                conversationHistory = (data.messages || [])
+                    .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content))
+                    .map(m => ({ role: m.role, content: m.content }));
+                const box = document.getElementById('chatMessages');
+                box.innerHTML = '';
+                for (const m of conversationHistory) {
+                    addMessage(m.role === 'assistant' ? 'assistant' : 'user', m.content);
+                }
+                addMessage('system', '已加载会话 ' + data.id + '（继续输入即可接着对话）');
+            } catch (e) {
+                console.error('load session failed', e);
+            }
+        }
+
+        function newSession() {
+            currentSessionId = null;
+            conversationHistory = [];
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('infoSession').textContent = '-';
+            addMessage('system', '已新建会话');
+        }
+
+        // ------------------------------------------------------------------
+        // L12 指标
+        // ------------------------------------------------------------------
+        async function loadMetrics() {
+            try {
+                const res = await fetch('/api/metrics');
+                const m = await res.json();
+                if (!m || !m.usage) return;
+                document.getElementById('infoCost').textContent =
+                    '$' + (m.cost_usd || 0).toFixed(4);
+                document.getElementById('infoContext').textContent =
+                    m.context_tokens || 0;
+                document.getElementById('infoCompactions').textContent =
+                    m.compactions || 0;
+                if (m.session_id) {
+                    document.getElementById('infoSession').textContent = m.session_id;
+                }
+            } catch (e) {
+                console.error('load metrics failed', e);
+            }
+        }
+
+        // 添加消息到对话区
+        function addMessage(type, content) {
+            const messages = document.getElementById('chatMessages');
+            const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+            console.log('[addMessage] type:', type, 'content:', content.substring(0, 50));
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ' + type;
+            msgDiv.id = msgId;
+
+            console.log('[addMessage] className:', msgDiv.className);
+
+            if (type !== 'system') {
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = type === 'user' ? 'U' : 'AI';
+                msgDiv.appendChild(avatar);
+            }
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            msgDiv.appendChild(contentDiv);
+
+            messages.appendChild(msgDiv);
+            messages.scrollTop = messages.scrollHeight;
+
+            console.log('[addMessage] DOM element:', msgDiv.outerHTML.substring(0, 100));
+
+            return msgId;
+        }
+
+        // 发送示例问题
+        function sendExample(text) {
+            document.getElementById('userInput').value = text;
+            sendMessage();
+        }
+
+        // 键盘事件
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 自动调整输入框高度
+        document.getElementById('userInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // 切换设置面板
+        function toggleSettings() {
+            document.getElementById('settingsPanel').classList.toggle('open');
+        }
+
+        // 从 /models 检测可用模型（支持 OpenAI 兼容与 Anthropic）
+        async function detectModels() {
+            const endpoint = document.getElementById('apiEndpoint').value.trim();
+            const key = document.getElementById('apiKey').value.trim();
+            const hint = document.getElementById('modelHint');
+            const select = document.getElementById('apiModelSelect');
+            hint.textContent = '正在检测模型...';
+            select.style.display = 'none';
+            try {
+                const res = await fetch('/api/models', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint, key })
+                });
+                const data = await res.json();
+                if (!res.ok || data.status !== 'ok') {
+                    hint.textContent = '检测失败：' + (data.message || res.status);
+                    return;
+                }
+                const models = data.models || [];
+                if (!models.length) {
+                    hint.textContent = '该地址没有返回模型列表，请手动填写模型名';
+                    return;
+                }
+                select.innerHTML = '';
+                for (const m of models) {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    select.appendChild(opt);
+                }
+                const current = document.getElementById('apiModel').value.trim();
+                if (current && models.includes(current)) select.value = current;
+                select.style.display = 'block';
+                hint.textContent = `检测到 ${models.length} 个模型（${data.url}），请选择`;
+            } catch (e) {
+                hint.textContent = '检测失败：' + e.message;
+            }
+        }
+
+        function pickModel(model) {
+            if (!model) return;
+            document.getElementById('apiModel').value = model;
+            document.getElementById('modelHint').textContent = '已选择：' + model;
+        }
+
+        // 保存设置
+        async function saveSettings() {
+            const endpoint = document.getElementById('apiEndpoint').value;
+            const key = document.getElementById('apiKey').value;
+            const model = document.getElementById('apiModel').value;
+
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api: { endpoint, key, model }
+                    })
+                });
+
+                if (res.ok) {
+                    alert('✅ 设置已保存！');
+                    toggleSettings();
+                    loadConfig();
+                } else {
+                    alert('❌ 保存失败');
+                }
+            } catch (e) {
+                alert('❌ 网络错误: ' + e.message);
+            }
+        }
+
+        // HTML 转义，避免工具参数中的特殊字符破坏页面结构
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, (ch) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[ch]));
+        }
+
+        // 添加工具调用卡片（beforeEl 存在时插入到它前面，保持"先工具后回答"的顺序）
+        function addToolCallCard(toolName, args, beforeEl) {
+            const messages = document.getElementById('chatMessages');
+            const cardId = 'tool-' + Date.now();
+
+            const card = document.createElement('div');
+            card.className = 'tool-call-card';
+            card.id = cardId;
+            card.innerHTML = `
+                <div class="tool-header">🔧 调用工具: ${escapeHtml(toolName)}</div>
+                <div class="tool-params"><code>${escapeHtml(JSON.stringify(args, null, 2))}</code></div>
+                <div class="tool-result pending">⏳ 执行中...</div>
+            `;
+
+            if (beforeEl && beforeEl.parentNode === messages) {
+                messages.insertBefore(card, beforeEl);
+            } else {
+                messages.appendChild(card);
+            }
+            messages.scrollTop = messages.scrollHeight;
+            return cardId;
+        }
+
+        // 更新最后一个工具卡片的结果
+        function updateLastToolCard(success, content) {
+            const cards = document.querySelectorAll('.tool-call-card');
+            if (cards.length === 0) return;
+
+            const lastCard = cards[cards.length - 1];
+            const resultDiv = lastCard.querySelector('.tool-result');
+
+            resultDiv.className = 'tool-result ' + (success ? 'success' : 'error');
+            const preview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+            resultDiv.textContent = success
+                ? '✅ 执行成功: ' + preview
+                : '❌ 执行失败: ' + preview;
+        }
+
+        // 页面加载时
+        loadConfig();
+        loadSessions();
+        loadMetrics();
+        applyMode(currentMode);
+    </script>
+</body>
+</html>

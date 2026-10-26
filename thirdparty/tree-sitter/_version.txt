@@ -1,0 +1,4 @@
+tree-sitter v0.25.0
+core: #define TREE_SITTER_LANGUAGE_VERSION 15
+cpp : #define LANGUAGE_VERSION 15
+fetched: 2026-10-05 13:44:11

@@ -1,0 +1,27 @@
+{
+  "agent": {
+    "max_context_tokens": 50000,
+    "max_history_messages": 40,
+    "max_repeat_calls": 3,
+    "max_steps": 8,
+    "time_limit_seconds": 60
+  },
+  "api": {
+    "endpoint": "http://127.0.0.1:18081/v1/chat/completions",
+    "key": "test-key",
+    "max_tokens": 512,
+    "model": "mock-model",
+    "provider": "custom",
+    "temperature": 0.2
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 18080,
+    "web_root": "./web"
+  },
+  "tools": {
+    "sandbox": true,
+    "work_dir": "",
+    "permission_mode": "allow_all"
+  }
+}

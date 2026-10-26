@@ -1,0 +1,71 @@
+﻿# 构建产物
+build/
+bin/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.out
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 本地配置（包含 API Key，不要提交）
+config.json
+config.local.json
+*.secret.json
+
+# 日志
+logs/
+*.log
+
+# 会话数据（每次对话一个目录）
+conversations/
+sessions/
+*.session
+
+# 测试产物
+test_output/
+*.tmp
+*.bak
+temp/
+tmp/
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.env
+
+# 系统文件
+Thumbs.db
+desktop.ini
+.Trashes
+
+# 运行期权限/记忆
+.af-permissions.json
+MEMORY.md
+config.perm.json

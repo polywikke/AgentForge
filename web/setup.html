@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentForge - 初始化向导</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            color: #e6edf3;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .wizard-container {
+            max-width: 600px;
+            width: 100%;
+            background: #161b22;
+            border-radius: 12px;
+            border: 1px solid #30363d;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .logo p {
+            color: #8b949e;
+            font-size: 14px;
+        }
+
+        .steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #30363d;
+            z-index: 0;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #21262d;
+            border: 2px solid #30363d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-circle {
+            background: #238636;
+            border-color: #238636;
+        }
+
+        .step.completed .step-circle {
+            background: #1f6feb;
+            border-color: #1f6feb;
+        }
+
+        .step-label {
+            font-size: 12px;
+            color: #8b949e;
+        }
+
+        .step.active .step-label {
+            color: #e6edf3;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #e6edf3;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #1f6feb;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 6px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+
+        .btn-primary {
+            background: #238636;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2ea043;
+        }
+
+        .btn-primary:disabled {
+            background: #21262d;
+            color: #6e7681;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            color: #e6edf3;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+        }
+
+        .status-box {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+
+        .success { color: #3fb950; }
+        .error { color: #f85149; }
+        .warning { color: #d29922; }
+        .info { color: #58a6ff; }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-success {
+            background: rgba(46, 160, 67, 0.15);
+            border: 1px solid rgba(46, 160, 67, 0.4);
+            color: #3fb950;
+        }
+
+        .alert-error {
+            background: rgba(248, 81, 73, 0.15);
+            border: 1px solid rgba(248, 81, 73, 0.4);
+            color: #f85149;
+        }
+
+        .alert-info {
+            background: rgba(88, 166, 255, 0.15);
+            border: 1px solid rgba(88, 166, 255, 0.4);
+            color: #58a6ff;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #30363d;
+            border-top-color: #58a6ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .code-block {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .provider-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .provider-card {
+            background: #0d1117;
+            border: 2px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .provider-card:hover {
+            border-color: #1f6feb;
+        }
+
+        .provider-card.selected {
+            border-color: #238636;
+            background: rgba(46, 160, 67, 0.1);
+        }
+
+        .provider-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .provider-desc {
+            font-size: 12px;
+            color: #8b949e;
+        }
+    </style>
+</head>
+<body>
+    <div class="wizard-container">
+        <div class="logo">
+            <h1>🤖 AgentForge</h1>
+            <p>快速配置向导</p>
+        </div>
+
+        <div class="steps">
+            <div class="step active" id="step1-indicator">
+                <div class="step-circle">1</div>
+                <div class="step-label">检查环境</div>
+            </div>
+            <div class="step" id="step2-indicator">
+                <div class="step-circle">2</div>
+                <div class="step-label">配置 API</div>
+            </div>
+            <div class="step" id="step3-indicator">
+                <div class="step-circle">3</div>
+                <div class="step-label">完成</div>
+            </div>
+        </div>
+
+        <!-- Step 1: 检查环境 -->
+        <div id="step1" class="step-content">
+            <h2 style="margin-bottom: 20px;">环境检查</h2>
+
+            <div class="status-box" id="statusBox">
+                <div class="status-item">
+                    <span class="status-icon">⏳</span>
+                    <span>正在检查服务器状态...</span>
+                </div>
+            </div>
+
+            <div class="alert alert-info hidden" id="compileAlert">
+                <span>ℹ️</span>
+                <div>
+                    <strong>需要编译项目</strong><br>
+                    请先运行编译脚本：<code>.\build_and_test.ps1</code>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="checkEnvironment()" id="checkBtn">
+                开始检查
+            </button>
+
+            <button class="btn btn-primary hidden" onclick="nextStep(2)" id="continueBtn">
+                继续配置 →
+            </button>
+        </div>
+
+        <!-- Step 2: 配置 API -->
+        <div id="step2" class="step-content hidden">
+            <h2 style="margin-bottom: 20px;">配置 API</h2>
+
+            <div class="form-group">
+                <label>选择 API 提供商</label>
+                <div class="provider-grid">
+                    <div class="provider-card" onclick="selectProvider('anthropic')">
+                        <div class="provider-name">Anthropic Claude</div>
+                        <div class="provider-desc">推荐</div>
+                    </div>
+                    <div class="provider-card" onclick="selectProvider('openai')">
+                        <div class="provider-name">OpenAI GPT</div>
+                        <div class="provider-desc">通用</div>
+                    </div>
+                    <div class="provider-card" onclick="selectProvider('deepseek')">
+                        <div class="provider-name">DeepSeek</div>
+                        <div class="provider-desc">国内</div>
+                    </div>
+                    <div class="provider-card" onclick="selectProvider('custom')">
+                        <div class="provider-name">自定义</div>
+                        <div class="provider-desc">中转站</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="apiEndpoint">API 端点</label>
+                <input type="text" id="apiEndpoint"
+                       placeholder="https://api.anthropic.com/v1/messages"
+                       value="https://api.anthropic.com/v1/messages">
+                <div class="hint">API 请求地址（需包含 /v1/... 完整路径）</div>
+            </div>
+
+            <div class="form-group">
+                <label for="apiKey">API Key</label>
+                <input type="password" id="apiKey"
+                       placeholder="sk-ant-api03-...">
+                <div class="hint">从 API 提供商获取的密钥</div>
+            </div>
+
+            <div class="form-group">
+                <label for="apiModel">模型</label>
+                <input type="text" id="apiModel"
+                       placeholder="claude-3-5-sonnet-20241022"
+                       value="claude-3-5-sonnet-20241022">
+                <div class="hint">使用的模型名称</div>
+            </div>
+
+            <div class="alert alert-error hidden" id="configError"></div>
+
+            <button class="btn btn-primary" onclick="saveAndStart()" id="saveBtn">
+                <span id="saveBtnText">保存并启动</span>
+                <span class="loading-spinner hidden" id="saveSpinner"></span>
+            </button>
+
+            <button class="btn btn-secondary" onclick="nextStep(1)">
+                ← 返回
+            </button>
+        </div>
+
+        <!-- Step 3: 完成 -->
+        <div id="step3" class="step-content hidden">
+            <div style="text-align: center;">
+                <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                <h2 style="margin-bottom: 20px;">配置完成！</h2>
+
+                <div class="alert alert-success">
+                    <span>🎉</span>
+                    <span>AgentForge 已成功配置并启动</span>
+                </div>
+
+                <div class="status-box" style="text-align: left;">
+                    <div class="status-item">
+                        <span class="status-icon success">✓</span>
+                        <span>服务器运行中</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-icon success">✓</span>
+                        <span>API 配置已保存</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-icon success">✓</span>
+                        <span id="serverUrl">http://127.0.0.1:8080</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="goToChat()">
+                    开始使用 AgentForge →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedProvider = 'anthropic';
+        let currentStep = 1;
+
+        const providerConfigs = {
+            anthropic: {
+                endpoint: 'https://api.anthropic.com/v1/messages',
+                model: 'claude-3-5-sonnet-20241022',
+                placeholder: 'sk-ant-api03-...'
+            },
+            openai: {
+                endpoint: 'https://api.openai.com/v1/chat/completions',
+                model: 'gpt-4o',
+                placeholder: 'sk-...'
+            },
+            deepseek: {
+                endpoint: 'https://api.deepseek.com/v1/chat/completions',
+                model: 'deepseek-chat',
+                placeholder: 'your-deepseek-key'
+            },
+            custom: {
+                endpoint: 'https://your-api.com/v1/chat/completions',
+                model: 'your-model',
+                placeholder: 'your-api-key'
+            }
+        };
+
+        function selectProvider(provider) {
+            selectedProvider = provider;
+
+            // 更新选中状态
+            document.querySelectorAll('.provider-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.target.closest('.provider-card').classList.add('selected');
+
+            // 更新表单
+            const config = providerConfigs[provider];
+            document.getElementById('apiEndpoint').value = config.endpoint;
+            document.getElementById('apiModel').value = config.model;
+            document.getElementById('apiKey').placeholder = config.placeholder;
+        }
+
+        async function checkEnvironment() {
+            const statusBox = document.getElementById('statusBox');
+            const checkBtn = document.getElementById('checkBtn');
+            const continueBtn = document.getElementById('continueBtn');
+            const compileAlert = document.getElementById('compileAlert');
+
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<span class="loading-spinner"></span> 检查中...';
+
+            statusBox.innerHTML = '<div class="status-item"><span class="status-icon">⏳</span><span>正在检查服务器...</span></div>';
+
+            try {
+                // 检查服务器是否运行
+                const response = await fetch('/api/health', {
+                    method: 'GET',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    statusBox.innerHTML = `
+                        <div class="status-item">
+                            <span class="status-icon success">✓</span>
+                            <span>服务器运行正常</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon success">✓</span>
+                            <span>版本: ${data.version || '2.0'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-icon success">✓</span>
+                            <span>端口: 8080</span>
+                        </div>
+                    `;
+
+                    checkBtn.classList.add('hidden');
+                    continueBtn.classList.remove('hidden');
+                    compileAlert.classList.add('hidden');
+
+                    // 自动进入下一步
+                    setTimeout(() => nextStep(2), 1000);
+                } else {
+                    throw new Error('服务器响应异常');
+                }
+            } catch (error) {
+                statusBox.innerHTML = `
+                    <div class="status-item">
+                        <span class="status-icon error">✗</span>
+                        <span>服务器未运行</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-icon warning">⚠</span>
+                        <span>需要先编译和启动服务器</span>
+                    </div>
+                `;
+
+                compileAlert.classList.remove('hidden');
+                checkBtn.disabled = false;
+                checkBtn.textContent = '重新检查';
+            }
+        }
+
+        async function saveAndStart() {
+            const endpoint = document.getElementById('apiEndpoint').value.trim();
+            const key = document.getElementById('apiKey').value.trim();
+            const model = document.getElementById('apiModel').value.trim();
+            const configError = document.getElementById('configError');
+            const saveBtn = document.getElementById('saveBtn');
+            const saveBtnText = document.getElementById('saveBtnText');
+            const saveSpinner = document.getElementById('saveSpinner');
+
+            // 验证输入
+            if (!endpoint || !key || !model) {
+                configError.textContent = '请填写所有必填字段';
+                configError.classList.remove('hidden');
+                return;
+            }
+
+            configError.classList.add('hidden');
+            saveBtn.disabled = true;
+            saveBtnText.classList.add('hidden');
+            saveSpinner.classList.remove('hidden');
+
+            try {
+                // 保存配置
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        api: {
+                            endpoint: endpoint,
+                            key: key,
+                            model: model
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    // 配置成功，进入完成页面
+                    nextStep(3);
+                } else {
+                    throw new Error('配置保存失败');
+                }
+            } catch (error) {
+                configError.textContent = '保存配置失败: ' + error.message;
+                configError.classList.remove('hidden');
+                saveBtn.disabled = false;
+                saveBtnText.classList.remove('hidden');
+                saveSpinner.classList.add('hidden');
+            }
+        }
+
+        function nextStep(step) {
+            // 隐藏所有步骤内容
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            // 更新步骤指示器
+            document.querySelectorAll('.step').forEach((stepEl, index) => {
+                stepEl.classList.remove('active', 'completed');
+                if (index + 1 < step) {
+                    stepEl.classList.add('completed');
+                } else if (index + 1 === step) {
+                    stepEl.classList.add('active');
+                }
+            });
+
+            // 显示当前步骤
+            document.getElementById('step' + step).classList.remove('hidden');
+            currentStep = step;
+        }
+
+        function goToChat() {
+            window.location.href = 'index.html';
+        }
+
+        // 页面加载时自动检查
+        window.addEventListener('load', () => {
+            setTimeout(checkEnvironment, 500);
+        });
+    </script>
+</body>
+</html>
