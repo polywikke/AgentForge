@@ -4,6 +4,40 @@
 
 ---
 
+## [v2.2] - 2026-10-28 —— 开箱即用：一键编译 / 自动开浏览器 / 首次向导 + 模型自动检测
+
+### 换别人电脑也能直接编译
+
+- `quick_build.bat` 重写：自动查找 CMake（PATH → VS 自带 → 常见安装目录），
+  按 VS 2026/2022/2019/2017 → Ninja → MinGW Makefiles → 默认生成器 依次尝试，
+  **不需要** Developer Command Prompt；失败时打印明确指引。
+- 识别 `build\` 旧缓存：`CMAKE_HOME_DIRECTORY` 与本机不一致、或生成器已不可用时自动删除重建；
+  旧缓存导致编译失败会再全量重建一次。
+- `CMakeLists.txt`：`bin/<Config>` 统一输出目录（Ninja/MinGW 单配置生成器也落在 `bin\Release`），
+  新增 `AF_BIN_DIR` 覆盖项；MinGW 构建自动复制 `libstdc++-6.dll` 等运行库。
+- `run_server.bat`：exe 不存在时自动先编译。
+
+### 启动即用
+
+- 服务器启动后自动打开浏览器（`--no-open` 可关闭）；端口被占用自动顺延；
+  首次运行（未配置）直接打开 `/setup.html`，已配置则打开工作台。
+- `/` 与 `/index.html` 在未配置时 302 到 `/setup.html`，`index.html` 前端也会兜底跳转。
+
+### 模型自动检测
+
+- `POST /api/models` 重写：从请求地址推导多个候选 `/models` 地址依次尝试，
+  支持 OpenAI 兼容与 Anthropic（`x-api-key` + `anthropic-version`）；
+  401/403 直接报认证失败；服务端没有 `/models` 时对已知服务商给出常见模型候选并提示手动确认。
+- `/api/health` 增加 `model / endpoint / port / has_key / setup_url`。
+- 首次向导页重做：服务商预设、地址自动补全、Key 显隐、**填完 Key 自动检测模型**并下拉选择；
+  设置面板可随时换 Key / 地址 / 模型接入新模型，保存无需重启。
+
+### 配置
+
+- `config.json` 不再携带任何 API Key：换电脑下载后第一次启动必然进入配置向导。
+
+---
+
 ## [v2.0] - 2026-10-26 —— L1-L12 全阶段实现
 
 > 从"L1-L6 可用、L7-L12 骨架"升级为 L1-L12 全部接入 Web 主流程。

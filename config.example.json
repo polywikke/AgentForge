@@ -1,5 +1,5 @@
 {
-  "_comment": "AgentForge 配置模板：复制为 config.json 后填写 api.key / endpoint / model",
+  "_comment": "AgentForge 配置模板。推荐做法：不要手改这个文件，直接运行 run_server.bat，第一次启动会自动打开 /setup.html 向导填写 API Key / 请求地址 / 模型名。下面 api 三项留空即可让向导生效。",
   "_provider_examples": {
     "anthropic": {
       "endpoint": "https://api.anthropic.com/v1/messages",
@@ -24,10 +24,10 @@
     "web_root": "./web"
   },
   "api": {
-    "provider": "openai",
-    "endpoint": "https://api.openai.com/v1/chat/completions",
-    "key": "your-api-key-here",
-    "model": "gpt-4o",
+    "provider": "custom",
+    "endpoint": "",
+    "key": "",
+    "model": "",
     "temperature": 0.7,
     "max_tokens": 4096
   },

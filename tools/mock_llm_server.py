@@ -4,6 +4,7 @@
 #
 # 支持:
 #   POST /v1/chat/completions   (stream=true / false)
+#   GET  /v1/models             (返回 mock 模型列表, 用于验证“自动检测模型”)
 #   GET  /health
 #
 # 行为:
@@ -137,6 +138,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             payload = json.dumps({"status": "ok"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        elif self.path in ("/v1/models", "/models"):
+            # 让“自动检测模型”可以在离线环境里跑通
+            payload = json.dumps({
+                "object": "list",
+                "data": [
+                    {"id": "mock-model", "object": "model"},
+                    {"id": "mock-model-mini", "object": "model"},
+                ],
+            }, ensure_ascii=False).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))

@@ -13,14 +13,18 @@ cd AgentForge
 quick_build.bat
 ```
 
+脚本会自己找 CMake（PATH → Visual Studio 自带的 CMake → 常见安装位置）和编译器
+（Visual Studio 2022/2026 → VS 2019 → Ninja/MinGW），**不需要** Developer Command Prompt。
+`build\` 若是别的电脑留下的旧缓存，会被自动识别并重建。
+
 PowerShell 版本（会打印本机 Visual Studio 检测结果）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build_and_test.ps1
 ```
 
-需要：CMake ≥ 3.15 + Visual Studio 2022/2026（含 "使用 C++ 的桌面开发"，Build Tools 亦可）。
-**不需要** Developer Command Prompt。
+需要：CMake ≥ 3.15 + Visual Studio 2022/2026（含 "使用 C++ 的桌面开发"，Build Tools 亦可），
+或 MinGW-w64 g++ + Ninja。
 
 产物：
 
@@ -36,21 +40,23 @@ bin\Release\agentforge_v2.exe     ← L1-L12 控制台版
 run_server.bat
 ```
 
-或：
+- 若还没编译，会自动先调用 `quick_build.bat`；
+- 服务器就绪后**自动打开浏览器**（默认 <http://127.0.0.1:8080/>，端口被占用会自动顺延）；
+- 端口可用 `<run_server.bat --port 9000>` 指定，`--no-open` 表示不自动开浏览器。
 
-```bat
-bin\Release\agentforge_web.exe --config config.json
-```
+## 3. 第一次配置（自动进入向导）
 
-浏览器自动打开 <http://127.0.0.1:8080/>。
+`config.json` 里不带任何 Key，所以第一次启动浏览器会直接停在 `/setup.html`：
 
-## 3. 配置 API
+1. 选服务商（DeepSeek / OpenAI / Claude / 自定义中转站）；
+2. 填请求地址（只填 base_url 也行，保存时自动补 `/v1/chat/completions`）；
+3. 填 API Key；
+4. **模型名自动检测**：填完 Key 后自动请求 `/models` 并给出下拉列表，自动选中第一个；
+   若该地址没有 `/models`，会给出常见模型候选，也可以手动输入；
+5. 点「保存并进入 AgentForge」，配置写进本机 `config.json`。
 
-任选其一：
-
-- 页面右上角 **设置** → 填 Endpoint / API Key / Model → 保存；
-- 打开 <http://127.0.0.1:8080/setup.html> 使用配置向导；
-- 直接编辑 `config.json`（参考 `config.example.json`）后重启。
+之后随时可以在 ⚙️ **设置** 里换 Key / 请求地址 / 模型（点「🔍 检测模型」自动出列表），
+或者打开 `/setup.html` 重新走一遍向导，**不需要重启服务器**。
 
 配置示例（OpenAI 兼容中转站）：
 

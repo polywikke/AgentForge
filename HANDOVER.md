@@ -17,13 +17,16 @@ JSONL 会话/检查点/三层记忆、Task 并行子代理、Trace/成本/上下
 
 ```bat
 cd AgentForge
-quick_build.bat      :: 首次会编译 tree-sitter，1-3 分钟
-run_server.bat       :: 启动并打开浏览器
+quick_build.bat      :: 自动找 CMake/VS（无需开发者命令行），首次编译 tree-sitter，1-3 分钟
+run_server.bat       :: 启动并自动打开浏览器（exe 不存在时会先自动编译）
 ```
 
-浏览器：<http://127.0.0.1:8080/>；配置：`/setup.html` 或右上角设置。
+浏览器：<http://127.0.0.1:8080/>（端口被占用自动顺延）。
+**第一次运行**会自动进入 `/setup.html` 向导：选服务商 → 填请求地址 → 填 API Key →
+自动检测模型名 → 保存并进入工作台。之后在右上角 ⚙️ 设置里可随时换 Key / 请求地址 / 模型。
 
-要求：CMake ≥ 3.15 + VS 2022/2026（C++ 桌面工作负载）。首次编译会编译 `thirdparty/tree-sitter`（约 25 MB）。
+要求：CMake ≥ 3.15（或直接用 VS 自带的 CMake）+ VS 2022/2026（C++ 桌面工作负载）或 MinGW；
+首次编译会编译 `thirdparty/tree-sitter`（约 25 MB）。
 
 自检/测试：
 

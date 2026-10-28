@@ -1,9 +1,24 @@
-﻿cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.15)
 project(AgentForge VERSION 2.0 LANGUAGES CXX C)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 单配置生成器 (Ninja / MinGW Makefiles) 默认编译 Release,
+# 保证产物和其他生成器一样落在 bin\Release 下
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# 可执行文件输出目录 (默认 <项目>/bin/<Config>)
+set(AF_BIN_DIR "${PROJECT_SOURCE_DIR}/bin" CACHE PATH "AgentForge 可执行文件输出目录")
+
+# MSVC: 静态链接 C/C++ 运行库 (/MT)，编译产物不依赖 VC++ 运行库，
+# 拷贝到别的电脑也能直接运行（不需要另装 VC redist）
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # 包含目录
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -83,8 +98,8 @@ if(WIN32)
 
     target_compile_definitions(agentforge_web PRIVATE USE_HTTPLIB USE_WINHTTP)
 
-    # Web 服务器需要 Winsock2 和 WinHTTP
-    target_link_libraries(agentforge_web PRIVATE ws2_32 winhttp)
+    # Web 服务器需要 Winsock2 和 WinHTTP（shell32 用于自动打开浏览器）
+    target_link_libraries(agentforge_web PRIVATE ws2_32 winhttp shell32)
     target_link_libraries(agentforge PRIVATE winhttp)
     target_link_libraries(agentforge_v2 PRIVATE winhttp)
 else()
@@ -102,9 +117,10 @@ else()
     endforeach()
 endif()
 
-# 设置输出目录 (多配置生成器会追加 Debug/Release 子目录)
+# 设置输出目录 (多配置生成器会追加 Debug/Release 子目录;
+# 单配置生成器通过 $<CONFIG> 展开成相同结构, 统一为 bin\Release)
 set_target_properties(agentforge agentforge_v2 agentforge_web PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin
+    RUNTIME_OUTPUT_DIRECTORY "${AF_BIN_DIR}/$<CONFIG>"
 )
 
 # 安装规则

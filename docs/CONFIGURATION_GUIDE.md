@@ -215,6 +215,10 @@ conversations/<YYYYMMDD_HHMMSS_主题>/workspace/
 
 ## 8. 网页端修改配置
 
+第一次启动（`config.json` 里没有 Key）时，浏览器会直接打开 `/setup.html` 向导：
+选服务商 → 填请求地址 → 填 API Key → **自动检测模型**（请求 `/models`）→ 保存。
+之后随时可以在 ⚙️ 设置里换 Key / 请求地址 / 模型，或在设置里点「初始化向导」重新配置。
+
 `POST /api/config` 支持三种写法（都会合并到当前配置并写盘）：
 
 **1) 只改 api 子字段**
@@ -244,7 +248,7 @@ conversations/<YYYYMMDD_HHMMSS_主题>/workspace/
 
 | 方法 | 路径 | 用途 |
 |------|------|------|
-| POST | `/api/models` | 探测 endpoint 的模型列表（不落盘，供设置页下拉选择） |
+| POST | `/api/models` | 自动检测模型名：探测 endpoint 的 `/models`（OpenAI 兼容 / Anthropic），失败时对已知服务商给出常见模型候选；不落盘 |
 | GET/POST | `/api/permissions` | 查看规则；`{"action":"reset"}` 重置；或 `{tool,arg_prefix,decision}` 手工加规则 |
 | POST | `/api/permission` | 权限弹窗回传：`{id,decision: allow_once/always_allow/deny_once/always_deny}` |
 | GET/POST | `/api/sessions` | 会话列表 / 新建 |
@@ -264,7 +268,7 @@ conversations/<YYYYMMDD_HHMMSS_主题>/workspace/
 
 | 现象 | 原因 / 处理 |
 |------|-------------|
-| 启动提示 `API key/endpoint not configured` | `api.key` 或 `api.endpoint` 为空 |
+| 启动提示 `API 未配置` / 浏览器停在配置向导 | 正常：`api.key`、`api.endpoint` 或 `api.model` 为空，按向导填写即可 |
 | HTTP 400 `... does not support non-default temperature` | 已自动重试；仍失败请检查模型 |
 | HTTP 404 | endpoint 少了 `/v1/chat/completions` 等路径 |
 | HTTP 401 | Key 错误 / 与 endpoint 不匹配 |

@@ -1,14 +1,17 @@
 # ============================================================================
-# AgentForge build script (Windows / Visual Studio)
+# AgentForge build script (Windows) —— quick_build.bat 的 PowerShell 包装
 #
-# Usage:
+# 真正的“找工具链 + 配置 + 编译”逻辑只有一份：quick_build.bat。
+# 这里额外做产物校验，并支持 -Clean / -Run。
+#
+# 用法:
 #   powershell -ExecutionPolicy Bypass -File .\build_and_test.ps1
+#   powershell -ExecutionPolicy Bypass -File .\build_and_test.ps1 -Clean
 #   powershell -ExecutionPolicy Bypass -File .\build_and_test.ps1 -Run
 #
-# Notes:
-#   - CMake locates Visual Studio (including Build Tools) by itself;
-#     you do NOT need a "Developer Command Prompt".
-#   - Builds all targets into <repo>\bin\Release.
+# 说明:
+#   - 不需要 Developer Command Prompt；
+#   - 产物输出到 <repo>\bin\Release。
 # ============================================================================
 param(
     [switch]$Run,
@@ -25,80 +28,26 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Project: $projectRoot"
 Write-Host ""
 
-# --- 1. toolchain check -----------------------------------------------------
-Write-Host "[1/5] Checking toolchain..." -ForegroundColor Yellow
-
-$cmake = Get-Command cmake -ErrorAction SilentlyContinue
-if (-not $cmake) {
-    Write-Host "ERROR: cmake not found in PATH. Install CMake >= 3.15." -ForegroundColor Red
-    exit 1
-}
-Write-Host "OK  CMake: $((cmake --version | Select-Object -First 1))"
-
-$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (Test-Path $vswhere) {
-    $instances = & $vswhere -all -products * -format json | ConvertFrom-Json
-    if ($instances.Count -gt 0) {
-        foreach ($inst in $instances) {
-            Write-Host ("OK  Visual Studio: {0} ({1}) -> {2}" -f `
-                $inst.displayName, $inst.installationVersion, $inst.installationPath)
-        }
-    } else {
-        Write-Host "WARN: vswhere found no Visual Studio installation." -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "WARN: vswhere not found; CMake will try its default generators." -ForegroundColor Yellow
-}
-
-if (-not (Test-Path "include/nlohmann/json.hpp")) {
-    Write-Host "ERROR: include/nlohmann/json.hpp is missing." -ForegroundColor Red
-    exit 1
-}
-Write-Host "OK  bundled headers: httplib.h / nlohmann/json.hpp"
-
-# --- 2. build directory -----------------------------------------------------
-Write-Host ""
-Write-Host "[2/5] Preparing build directory..." -ForegroundColor Yellow
-
+# --- 1. 清理（可选）--------------------------------------------------------
 if ($Clean -and (Test-Path "build")) {
-    Write-Host "Cleaning build/ ..."
+    Write-Host "[1/3] Removing build\ ..." -ForegroundColor Yellow
     Remove-Item -Recurse -Force "build"
 }
 New-Item -ItemType Directory -Force -Path "build" | Out-Null
 
-# --- 3. configure -----------------------------------------------------------
-Write-Host ""
-Write-Host "[3/5] Configuring CMake..." -ForegroundColor Yellow
-
-if (Test-Path "build/CMakeCache.txt") {
-    Write-Host "OK  Existing CMake cache found (incremental build). Use -Clean to reconfigure."
-} else {
-    cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "INFO: VS 17 2022 generator failed, letting CMake choose..." -ForegroundColor Yellow
-        Remove-Item -Recurse -Force "build" -ErrorAction SilentlyContinue
-        cmake -S . -B build
-    }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: CMake configure failed (is a C++ workload installed?)." -ForegroundColor Red
-        exit 1
-    }
-}
-
-# --- 4. build ---------------------------------------------------------------
-Write-Host ""
-Write-Host "[4/5] Building (Release)..." -ForegroundColor Yellow
-cmake --build build --config Release
+# --- 2. 编译（复用 quick_build.bat 的工具链探测逻辑）-----------------------
+Write-Host "[2/3] Building (quick_build.bat) ..." -ForegroundColor Yellow
+& cmd /c "quick_build.bat --no-pause"
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Build failed." -ForegroundColor Red
+    Write-Host "ERROR: build failed. See the messages above." -ForegroundColor Red
     exit 1
 }
 
-# --- 5. verify --------------------------------------------------------------
+# --- 3. 校验产物 -----------------------------------------------------------
 Write-Host ""
-Write-Host "[5/5] Checking outputs..." -ForegroundColor Yellow
+Write-Host "[3/3] Checking outputs ..." -ForegroundColor Yellow
 
-$targets = @("agentforge.exe", "agentforge_v2.exe", "agentforge_web.exe")
+$targets = @("agentforge_web.exe", "agentforge.exe", "agentforge_v2.exe")
 $allOk = $true
 foreach ($name in $targets) {
     $path = Join-Path $projectRoot "bin\Release\$name"
@@ -118,10 +67,10 @@ Write-Host "  Build Complete" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Start server:"
-Write-Host "  .\run_server.bat"
+Write-Host "  .\run_server.bat        (starts the server and opens the browser)"
 Write-Host "  or: .\bin\Release\agentforge_web.exe --config config.json"
 Write-Host ""
-Write-Host "Open: http://127.0.0.1:8080/  (setup: /setup.html)"
+Write-Host "First run: the setup wizard asks for API Key / endpoint / model."
 
 if ($Run) {
     Write-Host ""

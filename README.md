@@ -16,11 +16,18 @@ Windows 沙箱、五级压缩、tree-sitter 代码地图、JSONL 会话、并行
 
 ```bat
 cd AgentForge
-quick_build.bat
-run_server.bat
+quick_build.bat          :: 编译（自动找 CMake / Visual Studio，无需开发者命令行）
+run_server.bat           :: 启动并自动打开浏览器
 ```
 
-浏览器打开 <http://127.0.0.1:8080/>。首次使用可在 `/setup.html` 配置 API（或右上角设置）。
+`run_server.bat` 打开浏览器后会：
+
+1. **第一次运行**（还没有 Key）自动进入 `/setup.html` 配置向导：
+   选服务商 → 填请求地址 → 填 API Key → **模型名自动检测**（下拉选择）→ 保存并进入工作台；
+2. 已经配置过则直接打开工作台，右上角 ⚙️ 设置可随时换 Key / 请求地址 / 模型接入别家模型。
+
+> 仓库里的 `config.json` 不带任何 API Key：换一台电脑下载后第一次启动一定会走配置向导。
+> 配置会写回本机 `AgentForge/config.json`，下次启动直接可用。
 
 ### 三种运行模式（右上角切换）
 
@@ -64,11 +71,17 @@ conversations/<session_id>/
 
 对话目录名格式：`YYYYMMDD_HHMMSS_<主题>`，主题取首条用户消息并做非法字符清理。
 
-### 设置里切换模型
+### 换模型 / 接入新的大模型
 
-⚙️ 设置 → 填 endpoint/key → 点 **🔍 检测模型**：
-后端会请求 `/v1/models`（OpenAI 兼容）或 `/v1/models`（Anthropic），
-下拉选择后保存即可，不需要重启。检测只读取、不落盘；保存时才写 `config.json`。
+两种入口，改完都**不需要重启**：
+
+- 🧭 **初始化向导** `/setup.html`：首次配置，或整页切换服务商；
+- ⚙️ **设置**：随时填新的 `请求地址 + API Key + 模型名`，保存即生效。
+
+模型名可以 **自动检测**：向导里填完 Key 后会自动请求该地址的 `/models`
+（OpenAI 兼容 `GET /v1/models`、Anthropic `GET /v1/models`），成功后给出下拉列表并自动选中第一个；
+设置里点 **🔍 检测模型** 同理。若服务端没有 `/models`（部分中转站/本地服务），
+会退回常见模型候选并提示手动填写；检测只读取、不落盘，保存时才写 `config.json`。
 
 ### 运行限制（Web 设置）
 
@@ -85,11 +98,14 @@ conversations/<session_id>/
 > 简单任务也报“超出 token 预算”通常是 **累计预算** 太小（旧默认 100000），不是上下文超长。
 > 新默认是 `max_total_tokens=500000`，可在设置里随时调大或设为 0。
 
-前置条件：
+前置条件（`quick_build.bat` 会自动检测，缺什么会给出提示）：
 
-- CMake ≥ 3.15
-- Visual Studio 2022/2026（C++ 桌面工作负载，Build Tools 也可以）
+- CMake ≥ 3.15（PATH 里没有时，会用 Visual Studio 自带的 CMake）
+- 编译器二选一：
+  - Visual Studio 2022/2026（或 Build Tools）的「使用 C++ 的桌面开发」工作负载；**不需要**开发者命令行
+  - 或 MinGW-w64 g++ + Ninja / mingw32-make（会自动把运行库 DLL 复制到 `bin\Release`）
 - 首次编译会编译内置 tree-sitter C 源码（约 25 MB，1-3 分钟）
+- 构建目录 `build\` 若来自别的电脑会被自动识别并重建，无需手动删除
 
 产物：
 
@@ -264,8 +280,9 @@ AgentForge/
 └─ CMakeLists.txt / build_and_test.ps1 / quick_build.bat / run_server.bat
 ```
 
-> 已清理 `build/`、`bin/`（编译产物）、测试会话、旧截图和重复的 QUICK_START；
-> 首次运行先执行 `quick_build.bat` 生成 `bin/Release/`。
+> `build/` 只是编译缓存（来自别的电脑会被 `quick_build.bat` 自动识别并重建），可以随时删除；
+> `bin/Release/` 里的 exe 是编译产物，重新编译会覆盖。
+> 项目自带的 `config.json` 不含任何 Key：第一次运行一定会进入配置向导。
 
 ## 📚 文档
 

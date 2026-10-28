@@ -794,17 +794,23 @@
         <div class="settings-body">
             <div class="form-group">
                 <label>API 端点</label>
-                <input type="text" id="apiEndpoint" placeholder="https://api.example.com/v1/chat/completions">
+                <input type="text" id="apiEndpoint" placeholder="https://api.example.com/v1/chat/completions" onchange="maybeDetectModels()">
             </div>
             <div class="form-group">
                 <label>API Key</label>
-                <input type="password" id="apiKey" placeholder="sk-...">
+                <input type="password" id="apiKey" placeholder="sk-..." onchange="maybeDetectModels()">
+                <div style="font-size:11px;color:#8b949e;margin-top:6px;">
+                    留空 = 继续使用本机已保存的 Key；换成别家模型时，填新的 Key + 请求地址 + 模型即可。
+                </div>
             </div>
             <div class="form-group">
                 <label>模型 <button class="mini-btn" onclick="detectModels()">🔍 检测模型</button></label>
-                <input type="text" id="apiModel" placeholder="claude-sonnet-5-5">
+                <input type="text" id="apiModel" placeholder="deepseek-chat">
                 <select id="apiModelSelect" style="display:none;margin-top:8px;width:100%;padding:8px;background:#0d1117;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;" onchange="pickModel(this.value)"></select>
                 <div id="modelHint" style="font-size:11px;color:#8b949e;margin-top:6px;"></div>
+            </div>
+            <div class="form-group">
+                <button class="mini-btn" onclick="openSetupWizard()">🧭 打开初始化向导（首次配置 / 切换服务商）</button>
             </div>
             <div class="settings-section-title">工作区</div>
             <div class="form-group">
@@ -908,10 +914,21 @@
                 if (config.api) {
                     document.getElementById('apiEndpoint').value = config.api.endpoint || '';
                     document.getElementById('apiModel').value = config.api.model || '';
+                    const keyInput = document.getElementById('apiKey');
+                    if (keyInput) {
+                        keyInput.value = '';
+                        keyInput.placeholder = config.api.hasKey
+                            ? '已保存（' + (config.api.key || '***') + '），留空不修改'
+                            : 'sk-...';
+                    }
                     const sel = document.getElementById('apiModelSelect');
                     if (sel) { sel.style.display = 'none'; sel.innerHTML = ''; }
                     const hint = document.getElementById('modelHint');
-                    if (hint) hint.textContent = '';
+                    if (hint) {
+                        hint.textContent = config.api.configured
+                            ? '当前模型：' + (config.api.model || '-') + '（改完点“保存设置”）'
+                            : '尚未完成配置：请填写端点 / Key / 模型，或打开初始化向导';
+                    }
                 }
 
                 const agent = config.agent || {};
@@ -1383,12 +1400,30 @@
             document.getElementById('settingsPanel').classList.toggle('open');
         }
 
+        function openSetupWizard() {
+            window.location.href = 'setup.html';
+        }
+
+        // 设置里改完端点/Key 后（失焦）自动检测模型，省一次点击
+        function maybeDetectModels() {
+            const endpoint = document.getElementById('apiEndpoint').value.trim();
+            if (!/^https?:\/\//i.test(endpoint)) return;
+            const typedKey = document.getElementById('apiKey').value.trim();
+            const savedKey = !!(config && config.api && config.api.hasKey);
+            if (!typedKey && !savedKey) return;
+            detectModels();
+        }
+
         // 从 /models 检测可用模型（支持 OpenAI 兼容与 Anthropic）
         async function detectModels() {
             const endpoint = document.getElementById('apiEndpoint').value.trim();
             const key = document.getElementById('apiKey').value.trim();
             const hint = document.getElementById('modelHint');
             const select = document.getElementById('apiModelSelect');
+            if (!endpoint) {
+                hint.textContent = '请先填写 API 端点';
+                return;
+            }
             hint.textContent = '正在检测模型...';
             select.style.display = 'none';
             try {
@@ -1399,7 +1434,8 @@
                 });
                 const data = await res.json();
                 if (!res.ok || data.status !== 'ok') {
-                    hint.textContent = '检测失败：' + (data.message || res.status);
+                    hint.textContent = '检测失败：' + (data.message || data.detail || res.status) +
+                        '（可以手动填写模型名）';
                     return;
                 }
                 const models = data.models || [];
@@ -1423,7 +1459,12 @@
                     pickModel(models[0]);
                 }
                 select.style.display = 'block';
-                hint.textContent = `检测到 ${models.length} 个模型（${data.url}），请选择`;
+                if (data.source === 'builtin') {
+                    hint.textContent = (data.note || '该地址不支持 /models，已给出常见模型候选') +
+                        '（点“保存设置”生效）';
+                } else {
+                    hint.textContent = `检测到 ${models.length} 个模型（${data.url}），请选择`;
+                }
             } catch (e) {
                 hint.textContent = '检测失败：' + e.message;
             }
@@ -1482,7 +1523,15 @@
                 if (res.ok) {
                     alert('✅ 设置已保存！');
                     toggleSettings();
-                    loadConfig();
+                    await loadConfig();
+                    try {
+                        const health = await fetch('/api/health').then(r => r.json());
+                        if (!health.api_configured) {
+                            if (confirm('还缺少 API Key / 请求地址 / 模型名，是否打开初始化向导补全？')) {
+                                window.location.href = 'setup.html';
+                            }
+                        }
+                    } catch (e) { /* 忽略 */ }
                 } else {
                     alert('❌ 保存失败');
                 }
@@ -1536,11 +1585,25 @@
                 : '❌ 执行失败: ' + preview;
         }
 
-        // 页面加载时
-        loadConfig();
-        loadSessions();
-        loadMetrics();
-        applyMode(currentMode);
+        // 页面加载时：第一次运行（还没有 API 配置）先进入初始化向导
+        async function boot() {
+            applyMode(currentMode);
+            try {
+                const res = await fetch('/api/health');
+                const health = await res.json();
+                if (!health.api_configured) {
+                    window.location.replace('setup.html');
+                    return;
+                }
+            } catch (e) {
+                console.error('health check failed', e);
+            }
+            loadConfig();
+            loadSessions();
+            loadMetrics();
+        }
+
+        boot();
     </script>
 </body>
 </html>

@@ -1,8 +1,31 @@
 # AgentForge 编译与验证记录
 
-> 验证时间: 2026-10-26（v1.0）；2026-10-26 15:xx（v2.0 L1-L12 全量回归）
+> 验证时间: 2026-10-26（v1.0）；2026-10-26 15:xx（v2.0 L1-L12 全量回归）；**2026-10-28（v2.2 开箱即用）**
 > 验证人: 接手 Agent（自动化验证）
-> 结论: **v1.0：编译通过 + Web/SSE/工具/真实 API 通过；v2.0：L1-L12 全功能集成，selftest 15/15、smoke PASSED、权限/压缩/子代理/检查点/取消/指标均已实测**
+> 结论: **v1.0：编译通过 + Web/SSE/工具/真实 API 通过；v2.0：L1-L12 全功能集成，selftest 15/15、smoke PASSED、权限/压缩/子代理/检查点/取消/指标均已实测；v2.2：干净目录一键编译、自动开浏览器、首次向导 + 模型自动检测均已实测**
+
+---
+
+## 0. v2.2「下载即用」验证（2026-10-28）
+
+| 验证项 | 结果 |
+|--------|------|
+| 删除 `build\` 后运行 `quick_build.bat` | ✅ 自动选择生成器（本机为 Visual Studio 18 2026），0 error，产出 `bin\Release\agentforge_web.exe` |
+| 再次运行 `quick_build.bat` | ✅ 复用 `build\` 缓存做增量构建；`build\` 来自别的电脑会被识别并重建 |
+| exe 运行库依赖 | ✅ 只有 `WS2_32/WINHTTP/SHELL32/KERNEL32`（MSVC 运行库改为静态 `/MT`，不需要另装 VC redist） |
+| `quick_build.bat` 换行/标签 | ✅ 批处理使用 CRLF，`call :label` 子程序全部可用 |
+| `run_server.bat`（exe 已存在） | ✅ 启动服务器并在就绪后打开浏览器（`--no-open` 下验证启动、健康检查 200、`/` 302） |
+| `run_server.bat`（exe 被移走） | ✅ 自动先调用 `quick_build.bat` 再启动 |
+| 首次运行（`config.json` 无 Key） | ✅ `GET /` 与 `/index.html` 均 302 到 `/setup.html`；`/api/health.api_configured=false` |
+| 模型自动检测 | ✅ `POST /api/models` 对 Mock LLM 返回 2 个模型（`source=remote`）；地址不可达返回 502 并附尝试过的候选地址；无 Key 返回明确中文提示 |
+| 向导保存配置 | ✅ `POST /api/config` 后 `api_configured=true`，`GET /` 变为 200 |
+| 端到端对话 | ✅ Mock LLM 流式 SSE，`done.outcome=success`，会话/指标/trace 正常落盘 |
+| 端口占用 | ✅ 18099 被占用时自动使用 18100，并打印实际地址 |
+| 控制台自检 | ✅ `agentforge_v2.exe --selftest` → 15 passed, 0 failed（需在项目根目录运行） |
+| 前端静态检查 | ✅ `python tools/check_web_ui.py` 全部 OK；两个页面内联脚本 `node --check` 通过 |
+
+> 备注：本次验证在受限制的 Windows 沙箱内进行，MSBuild 需要 `MSBUILDDISABLENODEREUSE=1` + 单节点
+> 才能完成构建（沙箱禁止命名管道）；普通桌面环境双击 `quick_build.bat` 不受此限制。
 
 ---
 

@@ -2,10 +2,13 @@
 // AgentForge Web Server (v2.1) —— L1-L12 集成
 // ============================================================================
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
+#include <shellapi.h>
 
 #include <atomic>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -18,6 +21,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -64,6 +68,7 @@ std::shared_ptr<MemoryStore> g_memory;
 std::mutex g_active_mutex;
 std::map<std::string, std::shared_ptr<std::atomic<bool>>> g_active;
 std::atomic<unsigned long long> g_seq{1};
+std::atomic<int> g_port{0};
 
 std::mutex g_metrics_mutex;
 json g_metrics = json::object();
@@ -106,7 +111,7 @@ json defaultConfig() {
     return json{
         {"server", {{"host", "127.0.0.1"}, {"port", 8080}, {"web_root", "./web"}}},
         {"api", {{"provider", "custom"}, {"endpoint", ""}, {"key", ""},
-                 {"model", "claude-sonnet-5-5"}, {"temperature", 0.7},
+                 {"model", ""}, {"temperature", 0.7},
                  {"max_tokens", 4096}}},
         {"agent", {{"max_steps", 20}, {"time_limit_seconds", 300},
                    {"max_context_tokens", 100000}, {"max_total_tokens", 500000},
@@ -138,20 +143,93 @@ fs::path findAsset(const std::string& rel) {
 
 void logLine(const std::string& s) { std::cout << s << std::endl; }
 
+// ---------------------------------------------------------------------------
+// 启动辅助：端口占用探测 / 自动打开浏览器（首次运行直接进配置向导）
+// ---------------------------------------------------------------------------
+
+bool endsWith(const std::string& s, const std::string& suffix) {
+    return s.size() >= suffix.size() &&
+           s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string trimCopy(const std::string& s) {
+    size_t b = 0, e = s.size();
+    while (b < e && std::isspace((unsigned char)s[b])) ++b;
+    while (e > b && std::isspace((unsigned char)s[e - 1])) --e;
+    return s.substr(b, e - b);
+}
+
+bool isPortAvailable(const std::string& host, int port) {
+    SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s == INVALID_SOCKET) return false;
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((u_short)port);
+    std::string bind_host = (host.empty() || host == "localhost") ? "127.0.0.1" : host;
+    if (InetPtonA(AF_INET, bind_host.c_str(), &addr.sin_addr) != 1)
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    bool free_port = ::bind(s, (sockaddr*)&addr, sizeof(addr)) == 0;
+    ::closesocket(s);
+    return free_port;
+}
+
+// 监听地址是 0.0.0.0 时浏览器仍应访问 127.0.0.1
+std::string browserHost(const std::string& host) {
+    if (host.empty() || host == "0.0.0.0" || host == "::" || host == "localhost")
+        return "127.0.0.1";
+    return host;
+}
+
+int pickAvailablePort(const std::string& host, int base_port, int tries = 10) {
+    for (int i = 0; i < tries; ++i) {
+        int candidate = base_port + i;
+        if (candidate <= 0 || candidate > 65535) break;
+        if (isPortAvailable(host, candidate)) return candidate;
+    }
+    return 0;
+}
+
+// 监听成功后打开浏览器（稍微等一下，确保 accept 循环已经跑起来）
+void openBrowserDelayed(int port, const std::string& path) {
+    std::thread([port, path]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        const std::string url = "http://127.0.0.1:" + std::to_string(port) + path;
+        std::wstring wurl = utf8ToWide(url);
+        HINSTANCE r = ShellExecuteW(nullptr, L"open", wurl.c_str(), nullptr, nullptr,
+                                   SW_SHOWNORMAL);
+        if ((INT_PTR)r > 32) logLine("[Server] Browser opened: " + url);
+        else logLine("[Server] Open this URL manually: " + url);
+    }).detach();
+}
+
+
+bool apiConfiguredUnlocked() {
+    if (!g_config.contains("api") || !g_config["api"].is_object()) return false;
+    const auto& api = g_config["api"];
+    return !api.value("endpoint", "").empty() && !api.value("key", "").empty() &&
+           !api.value("model", "").empty();
+}
+
 json maskedConfig() {
     json copy = g_config;
-    if (copy.contains("api") && copy["api"].contains("key")) {
-        std::string key = copy["api"].value("key", "");
-        copy["api"]["hasKey"] = !key.empty();
-        if (key.size() > 8) copy["api"]["key"] = key.substr(0, 8) + "...";
-        else if (!key.empty()) copy["api"]["key"] = "***";
-    }
+    if (!copy.contains("api") || !copy["api"].is_object()) copy["api"] = json::object();
+    std::string key = copy["api"].value("key", "");
+    copy["api"]["hasKey"] = !key.empty();
+    copy["api"]["configured"] = apiConfiguredUnlocked();
+    if (key.size() > 8) copy["api"]["key"] = key.substr(0, 8) + "...";
+    else if (!key.empty()) copy["api"]["key"] = "***";
     return copy;
 }
 
 bool apiConfigured() {
-    const auto& api = g_config["api"];
-    return !api.value("endpoint", "").empty() && !api.value("key", "").empty();
+    std::lock_guard<std::mutex> lock(g_config_mutex);
+    return apiConfiguredUnlocked();
+}
+
+json currentApiConfig() {
+    std::lock_guard<std::mutex> lock(g_config_mutex);
+    if (!g_config.contains("api") || !g_config["api"].is_object()) return json::object();
+    return g_config["api"];
 }
 
 // 允许用户只填 base_url：自动补 /v1/chat/completions 或 /v1/messages
@@ -185,7 +263,11 @@ std::string normalizeChatEndpoint(std::string endpoint, const std::string& provi
 
 agentforge::APIConfig makeApiConfig() {
     agentforge::APIConfig cfg;
-    const auto& api = g_config["api"];
+    json api;
+    {
+        std::lock_guard<std::mutex> lock(g_config_mutex);
+        api = g_config["api"];
+    }
     cfg.api_key = api.value("key", "");
     std::string endpoint = api.value("endpoint", "");
     std::string provider = api.value("provider", "custom");
@@ -198,7 +280,7 @@ agentforge::APIConfig makeApiConfig() {
     }
 
     cfg.api_endpoint = normalizeChatEndpoint(endpoint, provider);
-    cfg.model = api.value("model", "claude-sonnet-5-5");
+    cfg.model = api.value("model", "");
     cfg.temperature = api.value("temperature", 0.7);
     cfg.max_tokens = api.value("max_tokens", 4096);
 
@@ -219,29 +301,128 @@ agentforge::APIConfig makeApiConfig() {
 }
 
 std::string systemPrompt() {
-    const auto& sp = g_config.value("systemPrompt", std::string(kPrompt));
+    std::string sp;
+    {
+        std::lock_guard<std::mutex> lock(g_config_mutex);
+        sp = g_config.value("systemPrompt", std::string(kPrompt));
+    }
     return sp.empty() ? kPrompt : sp;
 }
 
-// 从 chat/completions 地址推导 models 地址
-std::string modelsUrlFromEndpoint(const std::string& endpoint) {
-    std::string ep = endpoint;
-    while (!ep.empty() && ep.back() == '/') ep.pop_back();
-    auto replace_suffix = [&](const std::string& suffix, const std::string& repl) -> bool {
-        if (ep.size() >= suffix.size() &&
-            ep.compare(ep.size() - suffix.size(), suffix.size(), suffix) == 0) {
-            ep.replace(ep.size() - suffix.size(), suffix.size(), repl);
-            return true;
-        }
-        return false;
-    };
-    if (replace_suffix("/chat/completions", "/models")) return ep;
-    if (replace_suffix("/v1/messages", "/v1/models")) return ep;
-    auto pos = ep.find("/v1/");
-    if (pos != std::string::npos) return ep.substr(0, pos) + "/v1/models";
-    if (ep.size() >= 3 && ep.compare(ep.size() - 3, 3, "/v1") == 0) return ep + "/models";
-    return ep + "/v1/models";
+// ---------------------------------------------------------------------------
+// 模型自动检测：从用户填写的请求地址推导 /models 地址
+// 支持 OpenAI 兼容（/v1/chat/completions）与 Anthropic（/v1/messages）两种写法，
+// 也允许只填 base_url（https://api.deepseek.com）。
+// ---------------------------------------------------------------------------
+std::string stripTrailingSlashes(std::string s) {
+    while (!s.empty() && (s.back() == '/' || s.back() == ' ')) s.pop_back();
+    return s;
 }
+
+std::string urlHostOf(const std::string& url) {
+    std::string s = trimCopy(url);
+    auto pos = s.find("://");
+    if (pos != std::string::npos) s = s.substr(pos + 3);
+    auto slash = s.find('/');
+    if (slash != std::string::npos) s = s.substr(0, slash);
+    auto at = s.find('@');
+    if (at != std::string::npos) s = s.substr(at + 1);
+    auto colon = s.find(':');
+    if (colon != std::string::npos) s = s.substr(0, colon);
+    std::string lower = s;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return (char)std::tolower(c); });
+    return lower;
+}
+
+void pushUnique(std::vector<std::string>& list, const std::string& value) {
+    if (value.empty()) return;
+    if (std::find(list.begin(), list.end(), value) == list.end()) list.push_back(value);
+}
+
+std::vector<std::string> modelUrlCandidates(const std::string& endpoint) {
+    std::vector<std::string> out;
+    const std::string ep = stripTrailingSlashes(trimCopy(endpoint));
+    if (ep.empty()) return out;
+
+    if (endsWith(ep, "/chat/completions")) {
+        std::string base = ep.substr(0, ep.size() - std::string("/chat/completions").size());
+        pushUnique(out, base + "/models");
+    } else if (endsWith(ep, "/messages")) {
+        std::string base = ep.substr(0, ep.size() - std::string("/messages").size());
+        pushUnique(out, base + "/models");
+    } else if (endsWith(ep, "/completions")) {
+        std::string base = ep.substr(0, ep.size() - std::string("/completions").size());
+        pushUnique(out, base + "/models");
+    }
+
+    auto pos = ep.find("/v1/");
+    if (pos != std::string::npos) {
+        pushUnique(out, ep.substr(0, pos) + "/v1/models");
+    } else if (endsWith(ep, "/v1")) {
+        pushUnique(out, ep + "/models");
+    } else {
+        pushUnique(out, ep + "/v1/models");
+        pushUnique(out, ep + "/models");
+    }
+    return out;
+}
+
+void collectModelNames(const json& node, std::vector<std::string>& out) {
+    if (node.is_string()) {
+        pushUnique(out, node.get<std::string>());
+        return;
+    }
+    if (node.is_array()) {
+        for (const auto& item : node) {
+            if (item.is_string()) pushUnique(out, item.get<std::string>());
+            else if (item.is_object()) {
+                for (const char* key : {"id", "name", "model", "slug"}) {
+                    if (item.contains(key) && item[key].is_string()) {
+                        pushUnique(out, item[key].get<std::string>());
+                        break;
+                    }
+                }
+            }
+        }
+        return;
+    }
+    if (node.is_object()) {
+        for (const char* key : {"data", "models", "result", "items", "model_list"}) {
+            if (node.contains(key)) collectModelNames(node[key], out);
+        }
+    }
+}
+
+// 有些中转站 / 本地服务没有实现 /models；给出常见模型候选，避免用户卡住
+std::vector<std::string> builtinModelsFor(const std::string& endpoint) {
+    const std::string host = urlHostOf(endpoint);
+    auto has = [&host](const char* needle) {
+        return host.find(needle) != std::string::npos;
+    };
+    if (has("deepseek")) return {"deepseek-chat", "deepseek-reasoner"};
+    if (has("anthropic")) {
+        return {"claude-sonnet-4-5", "claude-opus-4-1",
+                "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"};
+    }
+    if (has("openai")) {
+        return {"gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"};
+    }
+    if (has("moonshot") || has("kimi")) {
+        return {"moonshot-v1-8k", "kimi-k2-0905-preview", "kimi-latest"};
+    }
+    if (has("siliconflow")) {
+        return {"deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct"};
+    }
+    if (has("dashscope") || has("aliyuncs")) {
+        return {"qwen-plus", "qwen-turbo", "qwen-max"};
+    }
+    if (has("bigmodel") || has("zhipu")) {
+        return {"glm-4-plus", "glm-4-flash"};
+    }
+    return {};
+}
+
 
 std::vector<Message> parseMessages(const json& body) {
     std::vector<Message> out;
@@ -307,7 +488,11 @@ std::string nowId() {
 
 BudgetConfig makeBudget() {
     BudgetConfig b;
-    int ctx = g_config["agent"].value("max_context_tokens", 100000);
+    int ctx = 100000;
+    {
+        std::lock_guard<std::mutex> lock(g_config_mutex);
+        ctx = g_config["agent"].value("max_context_tokens", 100000);
+    }
     if (ctx <= 0) {
         // 0 = 不限：给一个足够大的预算，同时限制地图/检索，避免启动时拉满内存
         b.total_budget = 1000000000;
@@ -416,11 +601,14 @@ int main(int argc, char* argv[]) {
 
     std::string config_arg, web_override;
     int port_override = 0;
+    bool open_browser = true;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if ((arg == "--config" || arg == "-c") && i + 1 < argc) config_arg = argv[++i];
         else if ((arg == "--port" || arg == "-p") && i + 1 < argc) port_override = std::atoi(argv[++i]);
         else if (arg == "--web" && i + 1 < argc) web_override = argv[++i];
+        else if (arg == "--no-open" || arg == "--headless") open_browser = false;
+        else if (arg == "--open") open_browser = true;
     }
 
     if (!config_arg.empty()) g_config_path = fs::path(config_arg);
@@ -453,9 +641,14 @@ int main(int argc, char* argv[]) {
     fs::path web_path = findAsset(web_root);
     web_root = web_path.empty() ? web_root : pathToUtf8(web_path);
 
-    if (!apiConfigured()) logLine("[Warning] API not configured (/setup.html)");
-    else logLine("[API] " + g_config["api"].value("endpoint", "") + "  model=" +
-                 g_config["api"].value("model", ""));
+    const bool configured_at_start = apiConfigured();
+    if (!configured_at_start) {
+        logLine("[Setup] API 未配置：首次运行请填写 API Key / 请求地址 / 模型名");
+        logLine("[Setup] 浏览器会自动打开配置向导（也可以手动访问 /setup.html）");
+    } else {
+        logLine("[API] " + g_config["api"].value("endpoint", "") + "  model=" +
+                g_config["api"].value("model", ""));
+    }
 
     SandboxConfig sc;
     sc.work_dir = g_config["tools"].value("work_dir", std::string(""));
@@ -511,11 +704,29 @@ int main(int argc, char* argv[]) {
     if (!svr.set_mount_point("/", web_root.c_str()))
         logLine("[Warning] web root not found: " + web_root);
 
+    // 首次运行（还没有 API 配置）时，访问首页直接进配置向导
+    svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+        if (req.path == "/" || req.path == "/index.html") {
+            if (!apiConfigured()) {
+                res.set_redirect("/setup.html");
+                return httplib::Server::HandlerResponse::Handled;
+            }
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+
     // ------------------------- 基础 API -------------------------
     svr.Get("/api/health", [](const httplib::Request&, httplib::Response& res) {
         auto r = g_repo->getStats();
+        bool configured = apiConfigured();
+        json api = currentApiConfig();
         sendJson(res, {{"status", "ok"}, {"version", "2.1"},
-                       {"api_configured", apiConfigured()},
+                       {"api_configured", configured},
+                       {"model", api.value("model", "")},
+                       {"endpoint", api.value("endpoint", "")},
+                       {"port", g_port.load()},
+                       {"has_key", !api.value("key", "").empty()},
+                       {"setup_url", "/setup.html"},
                        {"tools", g_tools->listTools()},
                        {"features", json::array({"stream", "tools", "permissions",
                                                  "sessions", "checkpoints", "repo_map",
@@ -557,7 +768,9 @@ int main(int argc, char* argv[]) {
             {
                 std::lock_guard<std::mutex> lock(g_config_mutex);
                 if (patch.contains("api") && patch["api"].is_object() &&
-                    patch["api"].contains("endpoint")) {
+                    patch["api"].contains("endpoint") &&
+                    !patch["api"].contains("provider")) {
+                    // 前端没显式指定 provider 时才按 URL 猜测，避免覆盖用户的选择
                     std::string ep = patch["api"].value("endpoint", "");
                     if (ep.find("/v1/messages") != std::string::npos ||
                         ep.find("anthropic") != std::string::npos) {
@@ -589,82 +802,128 @@ int main(int argc, char* argv[]) {
         sendJson(res, arr);
     });
 
-    // 从 OpenAI 兼容 / Anthropic 的 /models 拉取模型列表（不落盘）
+    // 从 OpenAI 兼容 / Anthropic 的 /models 拉取模型列表（不落盘，可用来验证 key 是否有效）
     svr.Post("/api/models", [](const httplib::Request& req, httplib::Response& res) {
         try {
             json body = req.body.empty() ? json::object() : json::parse(req.body);
-            std::string endpoint = body.value("endpoint", "");
-            std::string key = body.value("key", "");
+            std::string endpoint = stripTrailingSlashes(trimCopy(body.value("endpoint", "")));
+            std::string key = trimCopy(body.value("key", ""));
+            std::string provider = body.value("provider", "");
             json cfg;
             { std::lock_guard<std::mutex> lock(g_config_mutex); cfg = g_config; }
             if (endpoint.empty()) endpoint = cfg["api"].value("endpoint", "");
+            if (provider.empty()) provider = cfg["api"].value("provider", "custom");
+            // 传入的 key 为空 / 是保存后的掩码时，回退到已保存的 key
             if (key.empty() || key.find('*') != std::string::npos ||
                 (key.size() > 3 && key.compare(key.size() - 3, 3, "...") == 0)) {
                 key = cfg["api"].value("key", "");
             }
-            if (endpoint.empty() || key.empty()) {
+            if (endpoint.empty()) {
                 sendJson(res, {{"status", "error"},
-                               {"message", "endpoint 或 key 为空（可先保存设置）"}}, 400);
+                               {"message", "请先填写 API 请求地址（endpoint）"}}, 400);
                 return;
             }
-
-            const std::string url = modelsUrlFromEndpoint(endpoint);
-            const bool anthropic = endpoint.find("/v1/messages") != std::string::npos ||
-                                   endpoint.find("anthropic") != std::string::npos;
-            HttpRequest hr;
-            hr.url = url;
-            hr.method = "GET";
-            hr.timeout_ms = 20000;
-            hr.headers["Accept"] = "application/json";
-            hr.headers["Content-Type"] = "application/json";
-            if (anthropic) {
-                hr.headers["x-api-key"] = key;
-                hr.headers["anthropic-version"] = "2023-06-01";
-            } else {
-                hr.headers["Authorization"] = "Bearer " + key;
-            }
-
-            SimpleHTTPTransport transport;
-            HttpResponse resp = transport.request(hr);
-            if (resp.is_error) {
-                sendJson(res, {{"status", "error"}, {"message", resp.error_message},
-                               {"url", url}}, 502);
-                return;
-            }
-            if (resp.status_code < 200 || resp.status_code >= 300) {
+            if (endpoint.find("://") == std::string::npos) {
                 sendJson(res, {{"status", "error"},
-                               {"message", "HTTP " + std::to_string(resp.status_code) +
-                                           ": " + utf8Prefix(resp.body, 300)},
-                               {"url", url}}, 502);
+                               {"message", "请求地址需要以 http:// 或 https:// 开头"}}, 400);
+                return;
+            }
+            if (key.empty()) {
+                sendJson(res, {{"status", "error"},
+                               {"message", "请先填写 API Key，再自动检测模型"}}, 400);
                 return;
             }
 
-            json parsed = json::parse(resp.body);
-            std::set<std::string> unique;
-            if (parsed.contains("data") && parsed["data"].is_array()) {
-                for (const auto& item : parsed["data"]) {
-                    if (item.is_string()) unique.insert(item.get<std::string>());
-                    else if (item.is_object() && item.contains("id") &&
-                             item["id"].is_string()) {
-                        unique.insert(item["id"].get<std::string>());
-                    }
+            const bool anthropic = provider == "anthropic" ||
+                                   endpoint.find("/v1/messages") != std::string::npos ||
+                                   urlHostOf(endpoint).find("anthropic") != std::string::npos;
+
+            json attempts = json::array();
+            int last_status = 0;
+            std::string last_error;
+            std::string last_url;
+
+            for (const auto& url : modelUrlCandidates(endpoint)) {
+                HttpRequest hr;
+                hr.url = url;
+                hr.method = "GET";
+                hr.timeout_ms = 20000;
+                hr.headers["Accept"] = "application/json";
+                hr.headers["Content-Type"] = "application/json";
+                if (anthropic) {
+                    hr.headers["x-api-key"] = key;
+                    hr.headers["anthropic-version"] = "2023-06-01";
+                } else {
+                    hr.headers["Authorization"] = "Bearer " + key;
                 }
-            } else if (parsed.contains("models") && parsed["models"].is_array()) {
-                for (const auto& item : parsed["models"]) {
-                    if (item.is_string()) unique.insert(item.get<std::string>());
-                    else if (item.is_object() && item.contains("id") &&
-                             item["id"].is_string()) {
-                        unique.insert(item["id"].get<std::string>());
-                    }
+
+                SimpleHTTPTransport transport;
+                HttpResponse resp = transport.request(hr);
+                last_url = url;
+
+                if (resp.is_error) {
+                    last_status = 0;
+                    last_error = resp.error_message;
+                    attempts.push_back({{"url", url}, {"error", resp.error_message}});
+                    continue;
                 }
+                if (resp.status_code < 200 || resp.status_code >= 300) {
+                    last_status = resp.status_code;
+                    last_error = "HTTP " + std::to_string(resp.status_code) + ": " +
+                                 utf8Prefix(resp.body, 300);
+                    attempts.push_back({{"url", url},
+                                        {"status", resp.status_code},
+                                        {"error", utf8Prefix(resp.body, 300)}});
+                    continue;
+                }
+
+                std::vector<std::string> names;
+                try {
+                    collectModelNames(json::parse(resp.body), names);
+                } catch (const std::exception&) {
+                    last_status = resp.status_code;
+                    last_error = "返回内容不是 JSON（可能不是模型列表接口）";
+                    attempts.push_back({{"url", url}, {"error", last_error}});
+                    continue;
+                }
+                if (names.empty()) {
+                    last_status = resp.status_code;
+                    last_error = "接口返回成功，但没有模型列表";
+                    attempts.push_back({{"url", url}, {"error", last_error}});
+                    continue;
+                }
+                if (names.size() > 300) names.resize(300);
+                sendJson(res, {{"status", "ok"}, {"source", "remote"}, {"url", url},
+                               {"count", (int)names.size()}, {"models", names},
+                               {"attempts", attempts}});
+                return;
             }
-            json models = json::array();
-            for (const auto& m : unique) {
-                models.push_back(m);
-                if (models.size() >= 200) break;
+
+            // key / 权限错误不要用内置候选掩盖，直接把真实原因给用户
+            if (last_status == 401 || last_status == 403) {
+                sendJson(res, {{"status", "error"},
+                               {"message", "认证失败（HTTP " + std::to_string(last_status) +
+                                           "）：API Key 无效或没有权限"},
+                               {"detail", last_error}, {"url", last_url},
+                               {"attempts", attempts}}, 502);
+                return;
             }
-            sendJson(res, {{"status", "ok"}, {"url", url}, {"count", (int)models.size()},
-                           {"models", models}});
+
+            std::vector<std::string> builtin = builtinModelsFor(endpoint);
+            if (!builtin.empty()) {
+                sendJson(res, {{"status", "ok"}, {"source", "builtin"}, {"url", last_url},
+                               {"count", (int)builtin.size()}, {"models", builtin},
+                               {"note", "该地址没有提供 /models 接口，下面是常见模型名，"
+                                        "请确认后再保存（也可以手动填写）"},
+                               {"detail", last_error}, {"attempts", attempts}});
+                return;
+            }
+
+            sendJson(res, {{"status", "error"},
+                           {"message", last_error.empty()
+                                           ? "无法获取模型列表，请检查请求地址"
+                                           : last_error},
+                           {"url", last_url}, {"attempts", attempts}}, 502);
         } catch (const std::exception& e) {
             sendJson(res, {{"status", "error"},
                            {"message", std::string("解析失败: ") + e.what()}}, 400);
@@ -1108,9 +1367,40 @@ int main(int argc, char* argv[]) {
         }
     });
 
-    logLine("[Server] http://" + host + ":" + std::to_string(port));
-    if (!svr.listen(host.c_str(), port)) {
-        std::cerr << "[Error] listen failed\n";
+    // 端口被占用时自动顺延，避免双击 run_server.bat 后什么都没发生
+    int chosen_port = pickAvailablePort(host, port);
+    if (chosen_port == 0) {
+        std::cerr << "[Error] No free port found near " << port << "\n";
+        return 1;
+    }
+    if (chosen_port != port) {
+        logLine("[Server] Port " + std::to_string(port) + " is busy, using " +
+                std::to_string(chosen_port));
+    }
+    g_port = chosen_port;
+
+    // 先绑定端口，再打开浏览器，最后进入 accept 循环
+    if (!svr.bind_to_port(host.c_str(), chosen_port)) {
+        std::cerr << "[Error] cannot bind " << host << ":" << chosen_port << "\n";
+        return 1;
+    }
+
+    const std::string shown_host = browserHost(host);
+    const std::string base_url = "http://" + shown_host + ":" + std::to_string(chosen_port);
+    const std::string first_page = configured_at_start ? "/" : "/setup.html";
+    logLine("");
+    logLine("[Server] Web UI : " + base_url + "/");
+    logLine("[Server] Setup  : " + base_url + "/setup.html");
+    logLine("[Server] Health : " + base_url + "/api/health");
+    if (!configured_at_start) {
+        logLine("[Server] 首次运行：浏览器会打开配置向导，填好 Key / 请求地址 / 模型名即可");
+    }
+    logLine("[Server] Press Ctrl+C to stop.");
+
+    if (open_browser) openBrowserDelayed(chosen_port, first_page);
+
+    if (!svr.listen_after_bind()) {
+        std::cerr << "[Error] listen failed on port " << chosen_port << "\n";
         return 1;
     }
     return 0;
