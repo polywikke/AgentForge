@@ -1,0 +1,13 @@
+# ============================================================================
+# 换行约定
+#
+# Windows 批处理必须保持 CRLF：cmd 在纯 LF 的 .bat 里会报
+# "The system cannot find the batch label specified"（call :label / goto :label 失效）。
+#
+# 用 -text 让 Git 原样保存字节，不随 core.autocrlf 做转换，
+# 这样 `git clone` 和从 GitHub 直接下载 ZIP 得到的都是 CRLF。
+# ============================================================================
+*.bat -text
+*.cmd -text
+
+# 源码/文档在仓库内使用 LF（各平台编辑器都可正常处理）
